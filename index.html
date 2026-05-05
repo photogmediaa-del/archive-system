@@ -1301,6 +1301,64 @@ mark {
   </div>
 </div>
 
+<!-- EDIT USER MODAL -->
+<div class="modal-overlay" id="editUserModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">تعديل بيانات المستخدم</h2>
+      <button class="modal-close" onclick="closeModal('editUserModal')">
+        <svg class="icon"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editUserId">
+      <div class="form-group">
+        <label class="form-label">الاسم الكامل <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="editUserName" class="form-control">
+      </div>
+      <div class="form-group">
+        <label class="form-label">اسم المستخدم</label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="editUsername" class="form-control">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('editUsername').value=generateUsername()" title="توليد تلقائي">
+            <svg class="icon"><use href="#i-refresh"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">كلمة المرور
+          <span style="color:var(--text-subtle); font-size:11px; font-weight:400;">(اتركها فارغة للإبقاء على الحالية)</span>
+        </label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="editPassword" class="form-control" placeholder="أدخل كلمة مرور جديدة فقط لتغييرها">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('editPassword').value=generatePassword()" title="توليد تلقائي">
+            <svg class="icon"><use href="#i-refresh"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">كود المستخدم</label>
+        <input type="text" id="editUserCode" class="form-control" maxlength="10">
+        <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">⚠️ تغيير الكود لا يؤثر على أكواد الوثائق المحفوظة سابقاً</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">الصلاحية</label>
+        <select id="editUserRole" class="form-control">
+          <option value="user">مستخدم عادي</option>
+          <option value="admin">مدير</option>
+        </select>
+      </div>
+      <div style="display:flex; gap:8px; margin-top:8px;">
+        <button class="btn btn-primary" style="flex:1" onclick="saveUserEdit()">
+          <svg class="icon"><use href="#i-check"/></svg>
+          حفظ التعديلات
+        </button>
+        <button class="btn btn-ghost" onclick="closeModal('editUserModal')">إلغاء</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- DOCUMENT VIEW MODAL -->
 <div class="modal-overlay" id="docViewModal">
   <div class="modal" style="max-width:680px;">
@@ -2175,8 +2233,8 @@ function renderUsers() {
       <td><span class="badge badge-neutral">${u.doc_counter || 0} وثيقة</span></td>
       <td>${new Date(u.created_at).toLocaleDateString('ar-IQ')}</td>
       <td style="text-align:left;">
-        <button class="btn btn-ghost btn-sm" onclick="resetUserPassword(${u.id})">
-          <svg class="icon"><use href="#i-key"/></svg>إعادة تعيين
+        <button class="btn btn-ghost btn-sm" onclick="openEditUserModal(${u.id})" title="تعديل">
+          <svg class="icon"><use href="#i-file"/></svg>تعديل
         </button>
         ${u.id !== currentUser.id ? `<button class="btn btn-ghost-danger btn-sm btn-icon-only" onclick="deleteUser(${u.id})" title="حذف">
           <svg class="icon"><use href="#i-trash"/></svg>
@@ -2292,13 +2350,81 @@ function copyCreds(code, u, p, name) {
   navigator.clipboard.writeText(text).then(() => toast('تم النسخ', 'success'));
 }
 
-function resetUserPassword(id) {
-  if (!confirm('إعادة توليد كلمة مرور جديدة؟')) return;
-  const password = generatePassword();
-  execute("UPDATE users SET password = ? WHERE id = ?", [hashPassword(password), id]);
+function openEditUserModal(id) {
   const u = query("SELECT * FROM users WHERE id = ?", [id])[0];
-  logActivity('إعادة كلمة مرور', `للمستخدم: ${u.username}`);
-  alert(`كلمة المرور الجديدة لـ ${u.username}:\n\n${password}\n\nاحفظها الآن!`);
+  if (!u) return;
+  document.getElementById('editUserId').value = u.id;
+  document.getElementById('editUserName').value = u.name;
+  document.getElementById('editUsername').value = u.username;
+  document.getElementById('editPassword').value = '';
+  document.getElementById('editUserCode').value = u.user_code || '';
+  document.getElementById('editUserRole').value = u.role;
+  openModal('editUserModal');
+}
+
+function saveUserEdit() {
+  const id = parseInt(document.getElementById('editUserId').value);
+  if (!id) return;
+  const original = query("SELECT * FROM users WHERE id = ?", [id])[0];
+  if (!original) { toast('المستخدم غير موجود', 'error'); return; }
+
+  const name = document.getElementById('editUserName').value.trim();
+  if (!name) { toast('أدخل الاسم الكامل', 'error'); return; }
+
+  const username = document.getElementById('editUsername').value.trim();
+  if (!username) { toast('أدخل اسم المستخدم', 'error'); return; }
+  if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
+    toast('اسم المستخدم: أحرف إنجليزية/أرقام (3-30 حرف)', 'error'); return;
+  }
+  if (username !== original.username) {
+    if (query("SELECT id FROM users WHERE username = ? AND id != ?", [username, id]).length > 0) {
+      toast('اسم المستخدم موجود سابقاً', 'error'); return;
+    }
+  }
+
+  const userCode = document.getElementById('editUserCode').value.trim();
+  if (!userCode) { toast('أدخل كود المستخدم', 'error'); return; }
+  if (userCode !== original.user_code) {
+    if (query("SELECT id FROM users WHERE user_code = ? AND id != ?", [userCode, id]).length > 0) {
+      toast('كود المستخدم موجود سابقاً', 'error'); return;
+    }
+  }
+
+  const role = document.getElementById('editUserRole').value;
+  const newPassword = document.getElementById('editPassword').value;
+
+  if (newPassword) {
+    if (newPassword.length < 4) { toast('كلمة المرور يجب أن تكون 4 أحرف على الأقل', 'error'); return; }
+    execute(
+      "UPDATE users SET name = ?, username = ?, user_code = ?, role = ?, password = ? WHERE id = ?",
+      [name, username, userCode, role, hashPassword(newPassword), id]
+    );
+  } else {
+    execute(
+      "UPDATE users SET name = ?, username = ?, user_code = ?, role = ? WHERE id = ?",
+      [name, username, userCode, role, id]
+    );
+  }
+
+  const changes = [];
+  if (name !== original.name) changes.push(`الاسم: ${original.name} ← ${name}`);
+  if (username !== original.username) changes.push(`المستخدم: ${original.username} ← ${username}`);
+  if (userCode !== original.user_code) changes.push(`الكود: ${original.user_code} ← ${userCode}`);
+  if (role !== original.role) changes.push(`الصلاحية: ${original.role} ← ${role}`);
+  if (newPassword) changes.push('تم تغيير كلمة المرور');
+  logActivity('تعديل مستخدم', changes.join(' | ') || 'بدون تغييرات');
+
+  if (id === currentUser.id) {
+    currentUser = query("SELECT * FROM users WHERE id = ?", [id])[0];
+    sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+    document.getElementById('userName').textContent = currentUser.name;
+    document.getElementById('userRole').textContent = currentUser.role === 'admin' ? 'مدير' : 'مستخدم';
+    document.getElementById('userAvatar').textContent = (currentUser.name || 'U').charAt(0);
+  }
+
+  closeModal('editUserModal');
+  toast('تم حفظ التعديلات', 'success');
+  renderUsers();
 }
 
 function deleteUser(id) {
