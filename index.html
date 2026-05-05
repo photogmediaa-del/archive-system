@@ -1,0 +1,2342 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام الأرشفة الإلكترونية</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+:root {
+  --bg: #f7f6f1;
+  --surface: #ffffff;
+  --surface-2: #f1efe7;
+  --border: #e0ddd2;
+  --border-strong: #c8c4b3;
+  --text: #1f2924;
+  --text-muted: #6b7570;
+  --text-subtle: #98a09a;
+  --primary: #0d3b2e;
+  --primary-hover: #134d3c;
+  --primary-dark: #082721;
+  --accent: #b8860b;
+  --accent-hover: #9c7209;
+  --accent-light: #fdf8e8;
+  --gold: #c9a961;
+  --success: #2d6a4f;
+  --success-light: #ebf5f0;
+  --danger: #9b2226;
+  --danger-light: #f9ebec;
+  --warning: #b8860b;
+  --warning-light: #fdf8e8;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.05);
+  --radius: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html, body {
+  font-family: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+body { min-height: 100vh; }
+
+/* Icons */
+.icon { width: 16px; height: 16px; stroke-width: 2; flex-shrink: 0; }
+.icon-lg { width: 20px; height: 20px; stroke-width: 2; }
+.icon-xl { width: 32px; height: 32px; stroke-width: 1.75; }
+
+/* Login */
+#loginScreen {
+  position: fixed; inset: 0;
+  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 50%, #0a2e23 100%);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+  padding: 20px;
+}
+#loginScreen::before {
+  content: ''; position: absolute; inset: 0;
+  background-image:
+    radial-gradient(circle at 20% 30%, rgba(201,169,97,0.08) 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(201,169,97,0.06) 0%, transparent 40%);
+  pointer-events: none;
+}
+.login-card {
+  background: var(--surface); border-radius: var(--radius-lg); padding: 36px 36px 32px;
+  width: 100%; max-width: 420px; border: 1px solid var(--border);
+  box-shadow: 0 30px 80px rgba(0,0,0,0.4), 0 0 0 1px rgba(201,169,97,0.15);
+  position: relative; z-index: 1;
+}
+.login-card::before {
+  content: ''; position: absolute; top: 0; right: 0; left: 0; height: 3px;
+  background: linear-gradient(90deg, var(--gold), var(--accent), var(--gold));
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+}
+.login-logo {
+  width: 96px; height: 96px; margin: 0 auto 16px; display: block;
+  border-radius: 50%; border: 2px solid var(--gold);
+  background: var(--surface);
+  object-fit: cover; object-position: center;
+  box-shadow: 0 4px 12px rgba(13,59,46,0.15);
+}
+.login-org {
+  text-align: center; font-size: 15px; font-weight: 700;
+  color: var(--primary); margin-bottom: 4px; letter-spacing: 0.01em;
+}
+.login-org-sub {
+  text-align: center; font-size: 12px; color: var(--accent);
+  font-weight: 500; margin-bottom: 24px;
+  padding-bottom: 16px; border-bottom: 1px solid var(--border);
+}
+.login-card h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; letter-spacing: -0.01em; }
+.login-card .subtitle { color: var(--text-muted); margin-bottom: 22px; font-size: 12px; }
+
+/* App Layout */
+#appScreen { display: none; }
+.layout { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* Topbar */
+.topbar {
+  background: var(--primary); color: white;
+  padding: 0 28px; height: 64px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 50;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  border-bottom: 1px solid rgba(0,0,0,0.2);
+}
+.topbar::before {
+  content: ''; position: absolute; bottom: 0; right: 0; left: 0; height: 2px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+}
+.topbar-left, .topbar-right { display: flex; align-items: center; gap: 12px; }
+.topbar-brand { display: flex; align-items: center; gap: 12px; }
+.topbar-logo {
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 1.5px solid var(--gold); background: white;
+  object-fit: cover; object-position: center; display: block;
+}
+.topbar-logo-fallback {
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 1.5px solid var(--gold); background: var(--primary-dark);
+  display: flex; align-items: center; justify-content: center; color: var(--gold);
+}
+.topbar-title { font-weight: 700; font-size: 14px; line-height: 1.2; color: white; }
+.topbar-sub { color: var(--gold); font-size: 11px; margin-top: 3px; font-weight: 500; }
+
+.back-btn {
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+  color: white; padding: 8px 14px; border-radius: var(--radius);
+  cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 6px; transition: var(--transition);
+}
+.back-btn:hover { background: rgba(255,255,255,0.15); border-color: var(--gold); color: var(--gold); }
+.back-btn .icon { transform: rotate(180deg); }
+
+.user-pill {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(0,0,0,0.18); padding: 6px 12px 6px 6px;
+  border-radius: 30px; border: 1px solid rgba(255,255,255,0.08);
+}
+.user-pill-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--gold); color: var(--primary-dark);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 14px; flex-shrink: 0;
+}
+.user-pill-info { line-height: 1.2; }
+.user-pill-name { font-size: 13px; font-weight: 600; color: white; }
+.user-pill-meta { font-size: 11px; color: var(--gold); margin-top: 2px; }
+.user-pill-meta code {
+  background: rgba(201,169,97,0.2); border: 1px solid rgba(201,169,97,0.3);
+  padding: 0 4px; border-radius: 3px; font-family: 'Consolas', monospace;
+  font-size: 10px;
+}
+
+.topbar-logout {
+  background: transparent; border: 1px solid rgba(255,255,255,0.15);
+  color: rgba(255,255,255,0.85); padding: 8px 14px; border-radius: var(--radius);
+  cursor: pointer; font-family: inherit; font-size: 13px; font-weight: 500;
+  display: inline-flex; align-items: center; gap: 6px; transition: var(--transition);
+}
+.topbar-logout:hover { background: var(--danger); border-color: var(--danger); color: white; }
+
+.main {
+  flex: 1; padding: 28px 36px; max-width: 1280px;
+  width: 100%; margin: 0 auto;
+}
+.page-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border);
+}
+.page-title { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.page-subtitle { color: var(--text-muted); margin-top: 4px; font-size: 13px; }
+
+/* Forms */
+.form-group { margin-bottom: 16px; }
+.form-label {
+  display: block; margin-bottom: 6px; font-weight: 500; font-size: 13px; color: var(--text);
+}
+.form-control {
+  width: 100%; padding: 8px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius); font-size: 13px; transition: var(--transition);
+  background: var(--surface); color: var(--text);
+  font-family: inherit;
+}
+.form-control:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
+.form-control:hover:not(:focus) { border-color: var(--border-strong); }
+textarea.form-control { resize: vertical; min-height: 80px; }
+select.form-control {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2371717a' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: left 12px center;
+  padding-left: 32px; appearance: none;
+}
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+
+/* Buttons */
+.btn {
+  padding: 8px 14px; border: 1px solid transparent; border-radius: var(--radius);
+  font-size: 13px; cursor: pointer; transition: var(--transition); font-weight: 500;
+  display: inline-flex; align-items: center; gap: 6px; font-family: inherit;
+  white-space: nowrap;
+}
+.btn-primary { background: var(--primary); color: white; }
+.btn-primary:hover { background: var(--primary-hover); }
+.btn-accent { background: var(--accent); color: white; }
+.btn-accent:hover { background: var(--accent-hover); }
+.btn-success { background: var(--success); color: white; }
+.btn-success:hover { background: #15803d; }
+.btn-danger { background: var(--danger); color: white; }
+.btn-danger:hover { background: #b91c1c; }
+.btn-ghost { background: transparent; color: var(--text); border-color: var(--border); }
+.btn-ghost:hover { background: var(--surface-2); border-color: var(--border-strong); }
+.btn-ghost-danger { background: transparent; color: var(--danger); border-color: var(--border); }
+.btn-ghost-danger:hover { background: var(--danger-light); border-color: var(--danger); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-lg { padding: 10px 20px; font-size: 14px; }
+.btn-block { width: 100%; justify-content: center; }
+.btn-icon-only { padding: 6px; }
+
+/* Cards */
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 20px; margin-bottom: 16px;
+  box-shadow: var(--shadow-sm);
+}
+.card-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border);
+}
+.card-title {
+  font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 8px;
+}
+.card-subtitle { color: var(--text-muted); font-size: 12px; margin-top: 2px; }
+
+/* Table */
+.table-wrap {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); overflow: hidden;
+}
+table { width: 100%; border-collapse: collapse; }
+th, td {
+  padding: 11px 16px; text-align: right; border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+th {
+  background: var(--surface-2); font-weight: 600; color: var(--text-muted);
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em;
+}
+tr:last-child td { border-bottom: none; }
+tbody tr { transition: var(--transition); }
+tbody tr:hover { background: var(--surface-2); }
+td code {
+  background: var(--surface-2); padding: 2px 6px; border-radius: 4px;
+  font-family: 'Consolas', 'Courier New', monospace; font-size: 12px;
+}
+
+/* Badge */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;
+  border: 1px solid;
+}
+.badge-admin { background: var(--warning-light); color: var(--warning); border-color: #fde68a; }
+.badge-user { background: var(--accent-light); color: var(--accent); border-color: #bfdbfe; }
+.badge-success { background: var(--success-light); color: var(--success); border-color: #bbf7d0; }
+.badge-neutral { background: var(--surface-2); color: var(--text-muted); border-color: var(--border); }
+
+/* Modal */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+  z-index: 100; align-items: center; justify-content: center;
+  backdrop-filter: blur(2px);
+}
+.modal-overlay.active { display: flex; }
+.modal {
+  background: var(--surface); border-radius: var(--radius-lg);
+  max-width: 500px; width: 90%; max-height: 90vh; overflow-y: auto;
+  border: 1px solid var(--border); box-shadow: var(--shadow-lg);
+}
+.modal-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 18px 20px; border-bottom: 1px solid var(--border);
+}
+.modal-title { font-size: 16px; font-weight: 600; }
+.modal-body { padding: 20px; }
+.modal-close {
+  background: transparent; border: none; cursor: pointer;
+  width: 28px; height: 28px; border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); transition: var(--transition);
+}
+.modal-close:hover { background: var(--surface-2); color: var(--text); }
+
+/* Upload zone */
+.upload-zone {
+  border: 1.5px dashed var(--border-strong); border-radius: var(--radius-md);
+  padding: 36px 20px; text-align: center; cursor: pointer;
+  transition: var(--transition); background: var(--surface-2);
+}
+.upload-zone:hover, .upload-zone.dragover {
+  border-color: var(--accent); background: var(--accent-light);
+}
+.upload-zone .upload-icon {
+  margin: 0 auto 10px; width: 40px; height: 40px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted);
+}
+.upload-zone .upload-title { font-weight: 500; font-size: 13px; margin-bottom: 4px; }
+.upload-zone .upload-hint { color: var(--text-muted); font-size: 12px; }
+
+.preview-list { margin-top: 14px; }
+.preview-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); margin-bottom: 6px;
+}
+.preview-item .file-icon {
+  width: 32px; height: 32px; background: var(--surface-2); border-radius: var(--radius);
+  display: flex; align-items: center; justify-content: center; color: var(--text-muted);
+}
+.preview-item .file-info { flex: 1; min-width: 0; }
+.preview-item .file-name {
+  font-weight: 500; font-size: 13px; overflow: hidden;
+  text-overflow: ellipsis; white-space: nowrap;
+}
+.preview-item .file-size { color: var(--text-muted); font-size: 11px; margin-top: 2px; }
+
+/* Search bar */
+.search-bar {
+  position: relative; margin-bottom: 16px;
+}
+.search-bar input {
+  width: 100%; border: 1px solid var(--border); padding: 10px 38px 10px 14px;
+  border-radius: var(--radius-md); font-size: 13px; background: var(--surface);
+  font-family: inherit;
+}
+.search-bar input:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1);
+}
+.search-bar .search-icon {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  color: var(--text-muted); pointer-events: none;
+}
+
+/* Tabs */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.tab {
+  padding: 8px 14px; background: transparent; border: none; cursor: pointer;
+  font-size: 13px; font-weight: 500; color: var(--text-muted);
+  border-bottom: 2px solid transparent; margin-bottom: -1px;
+  transition: var(--transition); font-family: inherit;
+  display: flex; align-items: center; gap: 6px;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Tree (date archive) */
+.tree-container {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 12px;
+}
+.tree-year { margin-bottom: 4px; }
+.tree-year-header {
+  padding: 10px 14px; background: var(--primary); color: white;
+  border-radius: var(--radius); cursor: pointer;
+  font-weight: 500; display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; transition: var(--transition);
+}
+.tree-year-header:hover { background: var(--primary-hover); }
+.tree-month { margin: 4px 14px 0 0; }
+.tree-month-header {
+  padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius); cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center;
+  font-weight: 500; font-size: 13px; transition: var(--transition);
+}
+.tree-month-header:hover { background: #ebebed; }
+.tree-day { margin: 4px 24px 0 0; }
+.tree-day-header {
+  padding: 7px 12px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; transition: var(--transition); color: var(--text-muted);
+}
+.tree-day-header:hover { background: var(--surface-2); color: var(--text); }
+.tree-collapsed { display: none; }
+.tree-arrow { transition: var(--transition); }
+.tree-expanded .tree-arrow { transform: rotate(90deg); }
+
+/* Doc card */
+.doc-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); padding: 12px 14px; margin: 6px 0 0 0;
+  display: flex; gap: 12px; align-items: center; transition: var(--transition);
+}
+.doc-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
+.tree-day .doc-card { margin: 6px 36px 0 0; }
+.doc-card .doc-icon-wrap {
+  width: 36px; height: 36px; background: var(--accent-light);
+  border-radius: var(--radius); display: flex; align-items: center; justify-content: center;
+  color: var(--accent); flex-shrink: 0;
+}
+.doc-card .doc-info { flex: 1; min-width: 0; }
+.doc-card .doc-title {
+  font-weight: 500; font-size: 13px; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.doc-card .doc-meta {
+  color: var(--text-muted); font-size: 11px; margin-top: 3px;
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+}
+.doc-card .doc-meta-item { display: inline-flex; align-items: center; gap: 4px; }
+.doc-card .doc-actions { display: flex; gap: 4px; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 24px; left: 24px; padding: 12px 18px;
+  border-radius: var(--radius-md); background: var(--primary); color: white;
+  box-shadow: var(--shadow-lg); z-index: 2000;
+  transform: translateY(100px); opacity: 0; transition: 0.25s;
+  display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 500;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.error { background: var(--danger); }
+.toast.success { background: var(--success); }
+
+/* Empty state */
+.empty {
+  text-align: center; padding: 48px 20px; color: var(--text-muted);
+}
+.empty-icon {
+  width: 56px; height: 56px; background: var(--surface-2);
+  border-radius: var(--radius-lg); margin: 0 auto 12px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-subtle);
+}
+.empty-title { font-weight: 500; color: var(--text); margin-bottom: 4px; font-size: 14px; }
+.empty-text { font-size: 12px; }
+
+/* Credentials */
+.credentials-display {
+  background: var(--success-light); border: 1px solid #bbf7d0;
+  border-radius: var(--radius-md); padding: 14px; margin-top: 14px;
+  font-family: 'Consolas', monospace;
+}
+.credentials-display .alert {
+  display: flex; align-items: center; gap: 8px; color: var(--success);
+  font-weight: 600; margin-bottom: 10px; font-size: 13px;
+  font-family: 'IBM Plex Sans Arabic', sans-serif;
+}
+.credentials-display .warn {
+  background: var(--warning-light); border: 1px solid #fde68a;
+  color: var(--warning); padding: 6px 10px; border-radius: var(--radius);
+  font-size: 11px; margin-bottom: 10px; font-family: 'IBM Plex Sans Arabic', sans-serif;
+}
+.credentials-display .row {
+  display: flex; justify-content: space-between; padding: 6px 0;
+  border-bottom: 1px dashed rgba(0,0,0,0.05);
+}
+.credentials-display .row:last-of-type { border: none; }
+.credentials-display .label {
+  color: var(--text-muted); font-family: 'IBM Plex Sans Arabic', sans-serif; font-size: 12px;
+}
+.credentials-display .value {
+  font-weight: 700; color: var(--primary); user-select: all; font-size: 13px;
+}
+
+/* Scanner */
+#scannerVideo {
+  width: 100%; max-width: 480px; border-radius: var(--radius-md);
+  background: #000; display: none; border: 1px solid var(--border);
+}
+.scanner-controls { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-subtle); }
+
+/* Mark highlight */
+mark {
+  background: #fef08a; padding: 0 2px; border-radius: 2px; color: var(--text);
+}
+
+
+/* Danger zone */
+.danger-zone {
+  border: 1px solid #fecaca; background: var(--danger-light);
+}
+
+/* Home page */
+.home-hero {
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%23c9a961' stroke-width='0.5' opacity='0.12'%3E%3Cpath d='M40 0 L80 40 L40 80 L0 40 Z'/%3E%3Cpath d='M40 10 L70 40 L40 70 L10 40 Z'/%3E%3Cpath d='M40 20 L60 40 L40 60 L20 40 Z'/%3E%3Ccircle cx='40' cy='40' r='6'/%3E%3C/g%3E%3C/svg%3E"),
+    linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+  border-radius: var(--radius-lg); padding: 36px 40px; margin-bottom: 28px;
+  color: white; position: relative; overflow: hidden;
+  border: 1px solid var(--primary-dark);
+  box-shadow: 0 4px 12px rgba(13,59,46,0.15);
+}
+.home-hero::before {
+  content: ''; position: absolute; top: -60px; left: -60px;
+  width: 280px; height: 280px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(201,169,97,0.18) 0%, transparent 70%);
+}
+.home-hero::after {
+  content: ''; position: absolute; bottom: -80px; right: -80px;
+  width: 240px; height: 240px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(201,169,97,0.12) 0%, transparent 70%);
+}
+.home-hero-content { position: relative; z-index: 1; display: flex; align-items: center; gap: 26px; }
+.home-hero-logo-wrap {
+  position: relative; flex-shrink: 0;
+  padding: 6px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--gold), #8a6f2c);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+}
+.home-hero-logo-wrap::before {
+  content: ''; position: absolute; inset: -5px; border-radius: 50%;
+  border: 1px dashed rgba(201,169,97,0.6);
+  animation: rotateBorder 30s linear infinite;
+}
+@keyframes rotateBorder { to { transform: rotate(360deg); } }
+.home-hero-logo {
+  width: 100px; height: 100px; border-radius: 50%;
+  background: white; display: block;
+  object-fit: cover; object-position: center;
+}
+.home-hero-logo-fallback {
+  width: 100px; height: 100px; border-radius: 50%;
+  background: var(--primary-dark); padding: 5px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gold);
+}
+.home-hero-title { font-size: 24px; font-weight: 700; margin-bottom: 4px; letter-spacing: -0.01em; }
+.home-hero-sub { color: var(--gold); font-size: 14px; font-weight: 500; margin-bottom: 8px; }
+.home-hero-desc { color: rgba(255,255,255,0.75); font-size: 13px; line-height: 1.6; }
+.home-hero-stats {
+  display: flex; gap: 24px; margin-top: 16px; padding-top: 16px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+}
+.home-hero-stat {
+  display: flex; flex-direction: column;
+}
+.home-hero-stat-value { font-size: 22px; font-weight: 700; color: var(--gold); line-height: 1.2; }
+.home-hero-stat-label { font-size: 12px; color: rgba(255,255,255,0.7); margin-top: 2px; }
+
+.home-section-title {
+  font-size: 13px; font-weight: 600; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  margin: 8px 0 14px; display: flex; align-items: center; gap: 8px;
+}
+.home-section-title::after {
+  content: ''; flex: 1; height: 1px; background: var(--border);
+}
+
+.home-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+.home-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); padding: 22px; cursor: pointer;
+  transition: all 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative; overflow: hidden;
+  display: flex; flex-direction: column; gap: 14px;
+  text-align: right; min-height: 200px;
+  box-shadow: var(--shadow-sm);
+}
+.home-card::before {
+  content: ''; position: absolute; top: 0; right: 0; left: 0; height: 3px;
+  background: linear-gradient(90deg, var(--accent-color, var(--primary)), var(--gold));
+  transform: scaleX(0); transform-origin: right;
+  transition: transform 300ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.home-card::after {
+  content: ''; position: absolute; bottom: -50%; left: -30%;
+  width: 200px; height: 200px; border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-color-light, transparent) 0%, transparent 70%);
+  opacity: 0; transition: opacity 300ms;
+  pointer-events: none;
+}
+.home-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 24px -8px rgba(13,59,46,0.15), 0 4px 8px -2px rgba(0,0,0,0.06);
+  border-color: var(--accent-color, var(--primary));
+}
+.home-card:hover::before { transform: scaleX(1); }
+.home-card:hover::after { opacity: 1; }
+.home-card-icon {
+  width: 56px; height: 56px; border-radius: var(--radius-md);
+  background: var(--accent-color-light, var(--surface-2));
+  color: var(--accent-color, var(--primary));
+  display: flex; align-items: center; justify-content: center;
+  transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative; z-index: 1;
+}
+.home-card-icon svg { width: 28px; height: 28px; }
+.home-card:hover .home-card-icon {
+  background: var(--accent-color, var(--primary)); color: white;
+  transform: scale(1.05); box-shadow: 0 6px 16px -4px var(--accent-color, var(--primary));
+}
+.home-card-title {
+  font-size: 17px; font-weight: 700; color: var(--text);
+  letter-spacing: -0.01em;
+}
+.home-card-desc {
+  font-size: 12.5px; color: var(--text-muted); line-height: 1.6;
+}
+.home-card-stat {
+  margin-top: auto; padding-top: 14px; border-top: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; position: relative; z-index: 1;
+}
+.home-card-stat-value {
+  font-weight: 700; color: var(--accent-color, var(--primary)); font-size: 19px;
+  letter-spacing: -0.02em;
+}
+.home-card-stat-label { color: var(--text-muted); font-weight: 500; }
+.home-card-arrow {
+  position: absolute; top: 22px; left: 22px;
+  color: var(--text-subtle); transition: var(--transition);
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--surface-2);
+  display: flex; align-items: center; justify-content: center;
+}
+.home-card:hover .home-card-arrow {
+  color: white; background: var(--accent-color, var(--primary));
+  transform: translateX(-4px);
+}
+.home-card-arrow svg { width: 14px; height: 14px; }
+
+.home-card[data-color="primary"] { --accent-color: var(--primary); --accent-color-light: rgba(13,59,46,0.08); }
+.home-card[data-color="accent"] { --accent-color: var(--accent); --accent-color-light: var(--accent-light); }
+.home-card[data-color="success"] { --accent-color: var(--success); --accent-color-light: var(--success-light); }
+.home-card[data-color="danger"] { --accent-color: var(--danger); --accent-color-light: var(--danger-light); }
+
+@media (max-width: 768px) {
+  .topbar { padding: 0 14px; height: auto; min-height: 64px; flex-wrap: wrap; gap: 10px; padding-top: 10px; padding-bottom: 10px; }
+  .topbar-title { font-size: 12px; }
+  .topbar-sub { display: none; }
+  .user-pill-info { display: none; }
+  .topbar-logout span { display: none; }
+  .main { padding: 16px; }
+  .form-row, .form-row-3 { grid-template-columns: 1fr; }
+  .home-hero { padding: 22px; }
+  .home-hero-content { flex-direction: column; align-items: flex-start; }
+  .home-hero-stats { flex-wrap: wrap; gap: 14px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Icons SVG sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-archive" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="4" rx="1"/><path d="M5 7v13a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V7"/><path d="M10 12h4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+    <symbol id="i-database" viewBox="0 0 24 24" fill="none" stroke="currentColor"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></symbol>
+    <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="9 18 15 12 9 6"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="20 6 9 17 4 12"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
+    <symbol id="i-printer" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></symbol>
+  </defs>
+</svg>
+
+<!-- LOGIN SCREEN -->
+<div id="loginScreen">
+  <div class="login-card">
+    <img src="logo.png" alt="شعار مجلس النواب العراقي" class="login-logo"
+      onerror="this.onerror=null; this.src='logo.svg';">
+    <div class="login-org">جمهورية العراق</div>
+    <div class="login-org-sub">مجلس النواب العراقي</div>
+    <h1>نظام الأرشفة الإلكترونية</h1>
+    <p class="subtitle">يرجى إدخال بيانات الدخول للمتابعة</p>
+    <form id="loginForm">
+      <div class="form-group">
+        <label class="form-label">اسم المستخدم</label>
+        <input type="text" id="loginUsername" class="form-control" required autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label class="form-label">كلمة المرور</label>
+        <input type="password" id="loginPassword" class="form-control" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary btn-block btn-lg" style="margin-top: 8px;">تسجيل الدخول</button>
+    </form>
+    <p style="text-align:center; margin-top:20px; color:var(--text-muted); font-size:12px;">
+      افتراضي: <code style="background:var(--surface-2); padding:2px 6px; border-radius:4px;">admin</code> / <code style="background:var(--surface-2); padding:2px 6px; border-radius:4px;">admin123</code>
+    </p>
+  </div>
+</div>
+
+<!-- APP SCREEN -->
+<div id="appScreen">
+<div class="layout">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="back-btn" id="backBtn" onclick="showPage('home')" style="display:none;">
+        <svg class="icon"><use href="#i-chevron"/></svg>
+        <span>الرئيسية</span>
+      </button>
+      <div class="topbar-brand" onclick="showPage('home')" style="cursor:pointer;">
+        <img src="logo.png" alt="شعار" class="topbar-logo"
+          onerror="this.onerror=null; this.src='logo.svg';">
+        <div>
+          <div class="topbar-title">مجلس النواب العراقي</div>
+          <div class="topbar-sub">نظام الأرشفة الإلكترونية</div>
+        </div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="user-pill">
+        <div class="user-pill-avatar" id="userAvatar">A</div>
+        <div class="user-pill-info">
+          <div class="user-pill-name" id="userName"></div>
+          <div class="user-pill-meta">
+            <span id="userRole"></span> · <code id="userCodeBadge"></code>
+          </div>
+        </div>
+      </div>
+      <button class="topbar-logout" onclick="logout()">
+        <svg class="icon"><use href="#i-logout"/></svg>
+        <span>خروج</span>
+      </button>
+    </div>
+  </header>
+
+  <main class="main">
+    <!-- HOME PAGE -->
+    <div id="page-home" class="page">
+      <div class="home-hero">
+        <div class="home-hero-content">
+          <div class="home-hero-logo-wrap">
+            <img src="logo.png" alt="شعار مجلس النواب العراقي" class="home-hero-logo"
+              onerror="this.onerror=null; this.src='logo.svg';">
+          </div>
+          <div style="flex:1;">
+            <div class="home-hero-title">جمهورية العراق · مجلس النواب</div>
+            <div class="home-hero-sub">نظام الأرشفة الإلكترونية</div>
+            <div class="home-hero-desc" id="homeWelcome"></div>
+            <div class="home-hero-stats" id="homeStats"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-section-title">العمليات الأساسية</div>
+      <div class="home-grid">
+        <div class="home-card" data-color="primary" onclick="showPage('add')">
+          <div class="home-card-arrow"><svg class="icon-lg" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg></div>
+          <div class="home-card-icon"><svg class="icon-xl"><use href="#i-plus"/></svg></div>
+          <div>
+            <div class="home-card-title">إضافة وثيقة</div>
+            <div class="home-card-desc">رفع وثيقة من ملف أو من السكنر/الكاميرا مع توليد كود تلقائي</div>
+          </div>
+          <div class="home-card-stat">
+            <span class="home-card-stat-label">الكود التالي</span>
+            <span class="home-card-stat-value" id="homeNextCode" style="font-size:13px; font-family:Consolas,monospace;">---</span>
+          </div>
+        </div>
+
+        <div class="home-card" data-color="accent" onclick="showPage('archive')">
+          <div class="home-card-arrow"><svg class="icon-lg" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg></div>
+          <div class="home-card-icon"><svg class="icon-xl"><use href="#i-folder"/></svg></div>
+          <div>
+            <div class="home-card-title">الأرشيف بالتاريخ</div>
+            <div class="home-card-desc">تصفح كل الوثائق المؤرشفة منظمة حسب السنة والشهر واليوم</div>
+          </div>
+          <div class="home-card-stat">
+            <span class="home-card-stat-label">إجمالي الوثائق</span>
+            <span class="home-card-stat-value" id="homeDocCount">0</span>
+          </div>
+        </div>
+
+        <div class="home-card" data-color="success" onclick="showPage('search')">
+          <div class="home-card-arrow"><svg class="icon-lg" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg></div>
+          <div class="home-card-icon"><svg class="icon-xl"><use href="#i-search"/></svg></div>
+          <div>
+            <div class="home-card-title">البحث المتقدم</div>
+            <div class="home-card-desc">بحث شامل في الكود، العناوين، أرقام الصادر والوارد، والوسوم</div>
+          </div>
+          <div class="home-card-stat">
+            <span class="home-card-stat-label">حقول البحث</span>
+            <span class="home-card-stat-value">9+</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="home-section-title admin-only">الإدارة</div>
+      <div class="home-grid admin-only">
+        <div class="home-card" data-color="primary" onclick="showPage('users')">
+          <div class="home-card-arrow"><svg class="icon-lg" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg></div>
+          <div class="home-card-icon"><svg class="icon-xl"><use href="#i-users"/></svg></div>
+          <div>
+            <div class="home-card-title">المستخدمين</div>
+            <div class="home-card-desc">إنشاء حسابات للموظفين بأكواد وكلمات مرور تلقائية</div>
+          </div>
+          <div class="home-card-stat">
+            <span class="home-card-stat-label">عدد المستخدمين</span>
+            <span class="home-card-stat-value" id="homeUserCount">0</span>
+          </div>
+        </div>
+
+        <div class="home-card" data-color="accent" onclick="showPage('logs')">
+          <div class="home-card-arrow"><svg class="icon-lg" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg></div>
+          <div class="home-card-icon"><svg class="icon-xl"><use href="#i-clock"/></svg></div>
+          <div>
+            <div class="home-card-title">سجل النشاط</div>
+            <div class="home-card-desc">عرض جميع العمليات التي تمت في النظام مع التاريخ والمستخدم</div>
+          </div>
+          <div class="home-card-stat">
+            <span class="home-card-stat-label">عدد العمليات</span>
+            <span class="home-card-stat-value" id="homeLogCount">0</span>
+          </div>
+        </div>
+
+        <div class="home-card" data-color="danger" onclick="showPage('backup')">
+          <div class="home-card-arrow"><svg class="icon-lg" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg></div>
+          <div class="home-card-icon"><svg class="icon-xl"><use href="#i-database"/></svg></div>
+          <div>
+            <div class="home-card-title">قاعدة البيانات</div>
+            <div class="home-card-desc">النسخ الاحتياطية، الاستيراد، وإعدادات المزامنة عبر الشبكة</div>
+          </div>
+          <div class="home-card-stat">
+            <span class="home-card-stat-label">حالة الشبكة</span>
+            <span class="home-card-stat-value" style="font-size:13px;">محلي</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ADD DOCUMENT PAGE -->
+    <div id="page-add" class="page" style="display:none;">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">إضافة وثيقة جديدة</h1>
+          <p class="page-subtitle">رفع وثيقة من ملف أو من الكاميرا/السكنر</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">
+              <svg class="icon"><use href="#i-upload"/></svg>
+              مصدر الوثيقة
+            </div>
+            <div class="card-subtitle">اختر طريقة إضافة الملفات</div>
+          </div>
+        </div>
+
+        <div class="tabs">
+          <button class="tab active" data-source="file">
+            <svg class="icon"><use href="#i-file"/></svg>
+            ملف من الحاسبة
+          </button>
+          <button class="tab" data-source="camera">
+            <svg class="icon"><use href="#i-camera"/></svg>
+            من السكنر
+          </button>
+        </div>
+
+        <div id="fileSource">
+          <div class="upload-zone" id="uploadZone">
+            <div class="upload-icon"><svg class="icon-lg"><use href="#i-upload"/></svg></div>
+            <div class="upload-title">اسحب الملفات هنا أو اضغط للاختيار من الحاسبة</div>
+            <div class="upload-hint">PDF · صور · Word · Excel · أي نوع آخر</div>
+            <input type="file" id="fileInput" multiple style="display:none;" accept="*/*">
+          </div>
+        </div>
+
+        <div id="cameraSource" style="display:none;">
+          <div style="background:var(--accent-light); border:1px solid #fde68a; border-radius:var(--radius-md); padding:12px 14px; margin-bottom:14px; font-size:12px; color:var(--text);">
+            <svg class="icon" style="display:inline; vertical-align:middle; color:var(--accent);"><use href="#i-alert"/></svg>
+            دعم السكنر المباشر (TWAIN) يأتي مع نسخة EXE. حالياً يمكنك المسح عبر الكاميرا.
+          </div>
+          <video id="scannerVideo" autoplay playsinline></video>
+          <canvas id="scannerCanvas" style="display:none;"></canvas>
+          <div class="scanner-controls">
+            <button class="btn btn-accent" onclick="startCamera()" id="startCameraBtn">
+              <svg class="icon"><use href="#i-play"/></svg>تشغيل السكنر
+            </button>
+            <button class="btn btn-success" onclick="captureImage()" id="captureBtn" style="display:none;">
+              <svg class="icon"><use href="#i-camera"/></svg>مسح الصورة
+            </button>
+            <button class="btn btn-ghost" onclick="stopCamera()" id="stopCameraBtn" style="display:none;">
+              <svg class="icon"><use href="#i-stop"/></svg>إيقاف
+            </button>
+          </div>
+        </div>
+
+        <div class="preview-list" id="previewList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">
+              <svg class="icon"><use href="#i-file"/></svg>
+              معلومات الوثيقة
+            </div>
+            <div class="card-subtitle">البيانات الوصفية للأرشفة والبحث</div>
+          </div>
+          <div style="text-align:left;">
+            <div style="font-size:11px; color:var(--text-muted); margin-bottom:4px;">الكود التالي:</div>
+            <code id="nextCodePreview" style="background:var(--primary); color:var(--gold); padding:5px 12px; border-radius:5px; font-weight:700; font-size:14px; font-family:Consolas,monospace;">---</code>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">عنوان الوثيقة <span style="color:var(--danger)">*</span></label>
+          <input type="text" id="docTitle" class="form-control" required placeholder="مثال: عقد إيجار محل تجاري">
+        </div>
+        <div class="form-group">
+          <label class="form-label">التصنيف</label>
+          <select id="docCategory" class="form-control">
+            <option value="عام">عام</option>
+            <option value="مالي">مالي</option>
+            <option value="إداري">إداري</option>
+            <option value="قانوني">قانوني</option>
+            <option value="فني">فني</option>
+            <option value="عقود">عقود</option>
+            <option value="مراسلات">مراسلات</option>
+            <option value="فواتير">فواتير</option>
+            <option value="تقارير">تقارير</option>
+            <option value="أخرى">أخرى</option>
+          </select>
+        </div>
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">رقم الصادر</label>
+            <input type="text" id="docOutgoing" class="form-control" placeholder="مثال: ص/123">
+          </div>
+          <div class="form-group">
+            <label class="form-label">رقم الوارد</label>
+            <input type="text" id="docIncoming" class="form-control" placeholder="مثال: و/456">
+          </div>
+          <div class="form-group">
+            <label class="form-label">رقم الكتاب</label>
+            <input type="text" id="docBookNumber" class="form-control" placeholder="رقم الكتاب الرسمي">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">الوسوم (افصل بفاصلة)</label>
+          <input type="text" id="docTags" class="form-control" placeholder="مثال: مهم, 2026, محاسبة">
+        </div>
+        <div class="form-group">
+          <label class="form-label">الوصف</label>
+          <textarea id="docDescription" class="form-control" placeholder="وصف مفصل للوثيقة..."></textarea>
+        </div>
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">السنة</label>
+            <input type="number" id="docYear" class="form-control" min="1900" max="2100">
+          </div>
+          <div class="form-group">
+            <label class="form-label">الشهر</label>
+            <input type="number" id="docMonth" class="form-control" min="1" max="12">
+          </div>
+          <div class="form-group">
+            <label class="form-label">اليوم</label>
+            <input type="number" id="docDay" class="form-control" min="1" max="31">
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button class="btn btn-primary" onclick="saveDocument()">
+            <svg class="icon"><use href="#i-check"/></svg>حفظ في الأرشيف
+          </button>
+          <button class="btn btn-ghost" onclick="resetAddForm()">إعادة تعيين</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ARCHIVE BY DATE PAGE -->
+    <div id="page-archive" class="page" style="display:none;">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">الأرشيف بالتاريخ</h1>
+          <p class="page-subtitle">تصفح الوثائق حسب السنة والشهر واليوم</p>
+        </div>
+      </div>
+      <div id="archiveTree"></div>
+    </div>
+
+    <!-- SEARCH PAGE -->
+    <div id="page-search" class="page" style="display:none;">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">البحث في الأرشيف</h1>
+          <p class="page-subtitle">ابحث في كل الحقول والوثائق</p>
+        </div>
+      </div>
+      <div class="search-bar">
+        <input type="text" id="searchInput" placeholder="ابحث بالكود، العنوان، رقم الصادر، رقم الوارد، رقم الكتاب، الوسوم، اسم الموظف...">
+        <svg class="icon search-icon"><use href="#i-search"/></svg>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">فلاتر متقدمة</div>
+        </div>
+        <div class="form-row-3">
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">التصنيف</label>
+            <select id="filterCategory" class="form-control">
+              <option value="">الكل</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">من تاريخ</label>
+            <input type="date" id="filterFrom" class="form-control">
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label class="form-label">إلى تاريخ</label>
+            <input type="date" id="filterTo" class="form-control">
+          </div>
+        </div>
+      </div>
+
+      <div id="searchResults"></div>
+    </div>
+
+    <!-- USERS PAGE -->
+    <div id="page-users" class="page" style="display:none;">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">إدارة المستخدمين</h1>
+          <p class="page-subtitle">إنشاء حسابات بكلمات مرور تلقائية</p>
+        </div>
+        <button class="btn btn-primary" onclick="openCreateUserModal()">
+          <svg class="icon"><use href="#i-plus"/></svg>مستخدم جديد
+        </button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>الكود</th>
+              <th>الاسم</th>
+              <th>اسم المستخدم</th>
+              <th>الصلاحية</th>
+              <th>وثائق محفوظة</th>
+              <th>تاريخ الإنشاء</th>
+              <th style="text-align:left;">الإجراءات</th>
+            </tr>
+          </thead>
+          <tbody id="usersTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- LOGS PAGE -->
+    <div id="page-logs" class="page" style="display:none;">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">سجل النشاط</h1>
+          <p class="page-subtitle">جميع العمليات في النظام</p>
+        </div>
+        <button class="btn btn-ghost-danger" onclick="clearLogs()">
+          <svg class="icon"><use href="#i-trash"/></svg>مسح السجل
+        </button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>التاريخ والوقت</th>
+              <th>المستخدم</th>
+              <th>العملية</th>
+              <th>التفاصيل</th>
+            </tr>
+          </thead>
+          <tbody id="logsTableBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- BACKUP PAGE -->
+    <div id="page-backup" class="page" style="display:none;">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">قاعدة البيانات</h1>
+          <p class="page-subtitle">إدارة النسخ الاحتياطية والمزامنة</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">
+              <svg class="icon"><use href="#i-shield"/></svg>
+              شعار المؤسسة
+            </div>
+            <div class="card-subtitle">رفع شعار مجلس النواب الرسمي ليظهر في كل النظام</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:20px; align-items:flex-start; flex-wrap:wrap;">
+          <div id="logoPreviewWrap" style="width:120px; height:120px; flex-shrink:0; border-radius:50%; border:2px solid var(--gold); background:var(--surface-2); display:flex; align-items:center; justify-content:center; overflow:hidden;">
+            <img id="logoPreview" src="" alt="معاينة الشعار" style="width:100%; height:100%; object-fit:cover; display:none;">
+            <span id="logoPreviewEmpty" style="color:var(--text-subtle); font-size:11px; text-align:center; padding:10px;">لا يوجد شعار مرفوع<br>(يستخدم الافتراضي)</span>
+          </div>
+          <div style="flex:1; min-width:240px;">
+            <p style="color:var(--text-muted); font-size:13px; margin-bottom:14px; line-height:1.6;">
+              ارفع صورة الشعار الرسمي بصيغة PNG أو JPG. سيتم حفظه في النظام واستخدامه تلقائياً في:
+            </p>
+            <ul style="padding-right:20px; margin-bottom:16px; color:var(--text-muted); font-size:12px; line-height:1.8;">
+              <li>صفحة تسجيل الدخول</li>
+              <li>الشريط العلوي</li>
+              <li>الواجهة الرئيسية</li>
+            </ul>
+            <input type="file" id="logoUploadInput" accept="image/*" style="display:none;" onchange="uploadLogo(event)">
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn btn-primary" onclick="document.getElementById('logoUploadInput').click()">
+                <svg class="icon"><use href="#i-upload"/></svg>رفع شعار
+              </button>
+              <button class="btn btn-ghost-danger" id="removeLogoBtn" onclick="removeCustomLogo()" style="display:none;">
+                <svg class="icon"><use href="#i-trash"/></svg>إزالة الشعار المخصص
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="border-color:var(--accent); background:linear-gradient(to left, var(--accent-light), var(--surface));">
+        <div class="card-header" style="border-bottom-color:#fde68a;">
+          <div>
+            <div class="card-title" style="color:var(--accent);">
+              <svg class="icon"><use href="#i-shield"/></svg>
+              المزامنة عبر الشبكة المحلية
+            </div>
+            <div class="card-subtitle">حالة الاتصال والمشاركة بين الموظفين</div>
+          </div>
+          <span class="badge" style="background:#fee2e2; color:#991b1b; border-color:#fecaca;">غير متصل</span>
+        </div>
+        <div style="font-size:13px; line-height:1.7; color:var(--text);">
+          <p style="margin-bottom:10px;">النسخة الحالية تعمل <b>محلياً فقط</b> على هذا الجهاز — البيانات تُحفظ في متصفح كل جهاز بمعزل عن الآخر.</p>
+          <p style="margin-bottom:10px;"><b>لمشاركة البيانات بين موظفي مجلس النواب على نفس الشبكة المحلية</b> يلزم تشغيل نسخة الخادم (EXE) على جهاز رئيسي، وباقي الأجهزة تتصل به:</p>
+          <ul style="padding-right:24px; margin-bottom:10px; color:var(--text-muted);">
+            <li>قاعدة بيانات SQLite مركزية على الخادم الرئيسي</li>
+            <li>كل موظف يدخل بكوده الخاص ويرى وثائق الجميع</li>
+            <li>الأكواد المتسلسلة تتم مزامنتها مركزياً (لا تكرار)</li>
+            <li>دعم سكنر مباشر (TWAIN) في النسخة EXE</li>
+          </ul>
+          <p style="font-size:12px; color:var(--text-muted); padding-top:10px; border-top:1px dashed var(--border);">سيتم بناء نسخة الخادم في الخطوة التالية (Electron + Node.js + Express).</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">
+              <svg class="icon"><use href="#i-download"/></svg>
+              تصدير قاعدة البيانات
+            </div>
+            <div class="card-subtitle">احفظ نسخة كاملة من النظام تتضمن كل الوثائق والمستخدمين</div>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="exportDatabase()">
+          <svg class="icon"><use href="#i-download"/></svg>تنزيل نسخة احتياطية
+        </button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">
+              <svg class="icon"><use href="#i-upload"/></svg>
+              استيراد قاعدة بيانات
+            </div>
+            <div class="card-subtitle">استعد قاعدة البيانات من ملف نسخة احتياطية</div>
+          </div>
+        </div>
+        <input type="file" id="importDbInput" accept=".db,.sqlite" style="display:none;" onchange="importDatabase(event)">
+        <button class="btn btn-accent" onclick="document.getElementById('importDbInput').click()">
+          <svg class="icon"><use href="#i-upload"/></svg>استيراد قاعدة بيانات
+        </button>
+      </div>
+
+      <div class="card danger-zone">
+        <div class="card-header">
+          <div>
+            <div class="card-title" style="color:var(--danger);">
+              <svg class="icon"><use href="#i-alert"/></svg>
+              منطقة الخطر
+            </div>
+            <div class="card-subtitle">حذف كل البيانات وإعادة تهيئة النظام بالكامل</div>
+          </div>
+        </div>
+        <button class="btn btn-danger" onclick="resetSystem()">
+          <svg class="icon"><use href="#i-trash"/></svg>إعادة تعيين النظام
+        </button>
+      </div>
+    </div>
+  </main>
+</div>
+</div>
+
+<!-- CREATE USER MODAL -->
+<div class="modal-overlay" id="createUserModal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title">إنشاء مستخدم جديد</h2>
+      <button class="modal-close" onclick="closeModal('createUserModal')">
+        <svg class="icon"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">الاسم الكامل <span style="color:var(--danger)">*</span></label>
+        <input type="text" id="newUserName" class="form-control" placeholder="مثال: أحمد محمد">
+      </div>
+      <div class="form-group">
+        <label class="form-label">الصلاحية</label>
+        <select id="newUserRole" class="form-control">
+          <option value="user">مستخدم عادي</option>
+          <option value="admin">مدير</option>
+        </select>
+      </div>
+      <button class="btn btn-primary btn-block" onclick="createUser()">
+        <svg class="icon"><use href="#i-shield"/></svg>
+        توليد الحساب وكلمة المرور
+      </button>
+      <div id="newCredentials" style="display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- DOCUMENT VIEW MODAL -->
+<div class="modal-overlay" id="docViewModal">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-header">
+      <h2 class="modal-title" id="docViewTitle">عرض الوثيقة</h2>
+      <button class="modal-close" onclick="closeModal('docViewModal')">
+        <svg class="icon"><use href="#i-x"/></svg>
+      </button>
+    </div>
+    <div class="modal-body" id="docViewBody"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ============= DATABASE =============
+let SQL = null;
+let db = null;
+let currentUser = null;
+let pendingFiles = [];
+let cameraStream = null;
+
+const DB_KEY = 'archive_db_v3';
+const LOGO_KEY = 'archive_logo_data';
+
+function applyCustomLogo() {
+  const data = localStorage.getItem(LOGO_KEY);
+  if (!data) return;
+  document.querySelectorAll('.login-logo, .topbar-logo, .home-hero-logo').forEach(img => {
+    img.onerror = null;
+    img.src = data;
+  });
+  const preview = document.getElementById('logoPreview');
+  const empty = document.getElementById('logoPreviewEmpty');
+  const removeBtn = document.getElementById('removeLogoBtn');
+  if (preview) { preview.src = data; preview.style.display = 'block'; }
+  if (empty) empty.style.display = 'none';
+  if (removeBtn) removeBtn.style.display = 'inline-flex';
+}
+
+function uploadLogo(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) { toast('يرجى اختيار ملف صورة', 'error'); return; }
+  if (file.size > 2 * 1024 * 1024) { toast('حجم الصورة كبير. الحد الأقصى 2MB', 'error'); return; }
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      localStorage.setItem(LOGO_KEY, ev.target.result);
+      applyCustomLogo();
+      logActivity('رفع شعار المؤسسة', '');
+      toast('تم تحديث الشعار بنجاح', 'success');
+    } catch (err) {
+      toast('تعذر الحفظ. الصورة كبيرة جداً', 'error');
+    }
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+}
+
+function removeCustomLogo() {
+  if (!confirm('إزالة الشعار المخصص والعودة إلى الشعار الافتراضي؟')) return;
+  localStorage.removeItem(LOGO_KEY);
+  document.querySelectorAll('.login-logo, .topbar-logo, .home-hero-logo').forEach(img => {
+    img.src = 'logo.png';
+    img.onerror = function() { this.onerror = null; this.src = 'logo.svg'; };
+  });
+  const preview = document.getElementById('logoPreview');
+  const empty = document.getElementById('logoPreviewEmpty');
+  const removeBtn = document.getElementById('removeLogoBtn');
+  if (preview) { preview.src = ''; preview.style.display = 'none'; }
+  if (empty) empty.style.display = 'block';
+  if (removeBtn) removeBtn.style.display = 'none';
+  logActivity('إزالة الشعار المخصص', '');
+  toast('تم الإزالة', 'success');
+}
+
+async function initDB() {
+  SQL = await initSqlJs({ locateFile: f => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${f}` });
+  const saved = localStorage.getItem(DB_KEY);
+  if (saved) {
+    const arr = Uint8Array.from(atob(saved), c => c.charCodeAt(0));
+    db = new SQL.Database(arr);
+  } else {
+    db = new SQL.Database();
+    createSchema();
+    seedAdmin();
+    saveDB();
+  }
+}
+
+function createSchema() {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      name TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'user',
+      user_code TEXT UNIQUE NOT NULL,
+      doc_counter INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT UNIQUE NOT NULL,
+      title TEXT NOT NULL,
+      outgoing_number TEXT,
+      incoming_number TEXT,
+      book_number TEXT,
+      category TEXT,
+      tags TEXT,
+      description TEXT,
+      year INTEGER NOT NULL,
+      month INTEGER NOT NULL,
+      day INTEGER NOT NULL,
+      uploaded_by INTEGER NOT NULL,
+      uploaded_at TEXT NOT NULL,
+      FOREIGN KEY (uploaded_by) REFERENCES users(id)
+    );
+    CREATE TABLE IF NOT EXISTS files (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      doc_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      type TEXT,
+      size INTEGER,
+      data TEXT NOT NULL,
+      FOREIGN KEY (doc_id) REFERENCES documents(id) ON DELETE CASCADE
+    );
+    CREATE TABLE IF NOT EXISTS activity_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      username TEXT,
+      action TEXT NOT NULL,
+      details TEXT,
+      timestamp TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_doc_date ON documents(year, month, day);
+    CREATE INDEX IF NOT EXISTS idx_doc_title ON documents(title);
+    CREATE INDEX IF NOT EXISTS idx_doc_category ON documents(category);
+    CREATE INDEX IF NOT EXISTS idx_doc_code ON documents(code);
+  `);
+}
+
+function generateUserCode() {
+  const max = query("SELECT MAX(CAST(user_code AS INTEGER)) as m FROM users")[0]?.m || 0;
+  return String(max + 1).padStart(3, '0');
+}
+
+function seedAdmin() {
+  db.run(
+    "INSERT INTO users (username, password, name, role, user_code, doc_counter, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    ['admin', hashPassword('admin123'), 'مدير النظام', 'admin', '001', 0, new Date().toISOString()]
+  );
+}
+
+function saveDB() {
+  const data = db.export();
+  const b64 = btoa(String.fromCharCode.apply(null, data));
+  try {
+    localStorage.setItem(DB_KEY, b64);
+  } catch (e) {
+    toast('تحذير: قاعدة البيانات كبيرة. استخدم النسخة الاحتياطية للحفظ', 'error');
+  }
+}
+
+function hashPassword(pw) {
+  let h = 0;
+  for (let i = 0; i < pw.length; i++) {
+    h = ((h << 5) - h) + pw.charCodeAt(i);
+    h |= 0;
+  }
+  return 'h_' + h.toString(36) + '_' + pw.length;
+}
+
+function query(sql, params = []) {
+  const stmt = db.prepare(sql);
+  stmt.bind(params);
+  const rows = [];
+  while (stmt.step()) rows.push(stmt.getAsObject());
+  stmt.free();
+  return rows;
+}
+
+function execute(sql, params = []) {
+  db.run(sql, params);
+  saveDB();
+}
+
+function logActivity(action, details = '') {
+  if (!currentUser) return;
+  execute(
+    "INSERT INTO activity_log (user_id, username, action, details, timestamp) VALUES (?, ?, ?, ?, ?)",
+    [currentUser.id, currentUser.username, action, details, new Date().toISOString()]
+  );
+}
+
+// ============= AUTH =============
+document.getElementById('loginForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const u = document.getElementById('loginUsername').value.trim();
+  const p = document.getElementById('loginPassword').value;
+  const rows = query("SELECT * FROM users WHERE username = ? AND password = ?", [u, hashPassword(p)]);
+  if (rows.length === 0) { toast('بيانات الدخول غير صحيحة', 'error'); return; }
+  currentUser = rows[0];
+  sessionStorage.setItem('currentUser', JSON.stringify(currentUser));
+  showApp();
+  logActivity('تسجيل دخول', '');
+});
+
+function logout() {
+  if (!confirm('هل تريد تسجيل الخروج؟')) return;
+  logActivity('تسجيل خروج', '');
+  sessionStorage.removeItem('currentUser');
+  currentUser = null;
+  document.getElementById('appScreen').style.display = 'none';
+  document.getElementById('loginScreen').style.display = 'flex';
+  document.getElementById('loginUsername').value = '';
+  document.getElementById('loginPassword').value = '';
+}
+
+function showApp() {
+  document.getElementById('loginScreen').style.display = 'none';
+  document.getElementById('appScreen').style.display = 'block';
+  const fresh = query("SELECT * FROM users WHERE id = ?", [currentUser.id])[0];
+  if (fresh) currentUser = fresh;
+  document.getElementById('userName').textContent = currentUser.name;
+  document.getElementById('userRole').textContent = currentUser.role === 'admin' ? 'مدير' : 'مستخدم';
+  document.getElementById('userAvatar').textContent = (currentUser.name || 'U').charAt(0);
+  document.getElementById('userCodeBadge').textContent = currentUser.user_code || '---';
+  document.querySelectorAll('.admin-only').forEach(el => {
+    el.style.display = currentUser.role === 'admin' ? '' : 'none';
+  });
+  showPage('home');
+}
+
+// ============= NAVIGATION =============
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
+  const pageEl = document.getElementById('page-' + name);
+  if (pageEl) pageEl.style.display = 'block';
+  const backBtn = document.getElementById('backBtn');
+  if (backBtn) backBtn.style.display = name === 'home' ? 'none' : 'inline-flex';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  if (name === 'home') renderHome();
+  if (name === 'archive') renderArchiveTree();
+  if (name === 'search') initSearchPage();
+  if (name === 'users') renderUsers();
+  if (name === 'logs') renderLogs();
+  if (name === 'add') resetAddForm();
+  if (name === 'backup') applyCustomLogo();
+}
+
+function renderHome() {
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'صباح الخير' : hour < 17 ? 'مساء الخير' : 'مساء الخير';
+  document.getElementById('homeWelcome').innerHTML =
+    `${greeting}، <b style="color:white">${escapeHtml(currentUser.name)}</b> · مرحباً بك في النظام`;
+
+  const docCount = query("SELECT COUNT(*) as c FROM documents")[0].c;
+  const userCount = query("SELECT COUNT(*) as c FROM users")[0].c;
+  const logCount = query("SELECT COUNT(*) as c FROM activity_log")[0].c;
+  const myDocs = query("SELECT COUNT(*) as c FROM documents WHERE uploaded_by = ?", [currentUser.id])[0].c;
+  const today = new Date();
+  const todayDocs = query(
+    "SELECT COUNT(*) as c FROM documents WHERE year = ? AND month = ? AND day = ?",
+    [today.getFullYear(), today.getMonth() + 1, today.getDate()]
+  )[0].c;
+
+  document.getElementById('homeStats').innerHTML = `
+    <div class="home-hero-stat">
+      <span class="home-hero-stat-value">${docCount}</span>
+      <span class="home-hero-stat-label">إجمالي الوثائق</span>
+    </div>
+    <div class="home-hero-stat">
+      <span class="home-hero-stat-value">${myDocs}</span>
+      <span class="home-hero-stat-label">وثائقي</span>
+    </div>
+    <div class="home-hero-stat">
+      <span class="home-hero-stat-value">${todayDocs}</span>
+      <span class="home-hero-stat-label">وثائق اليوم</span>
+    </div>
+  `;
+
+  document.getElementById('homeDocCount').textContent = docCount;
+  document.getElementById('homeUserCount').textContent = userCount;
+  document.getElementById('homeLogCount').textContent = logCount;
+
+  const u = query("SELECT user_code, doc_counter FROM users WHERE id = ?", [currentUser.id])[0];
+  if (u) {
+    const next = `${u.user_code}-${String((u.doc_counter || 0) + 1).padStart(5, '0')}`;
+    document.getElementById('homeNextCode').textContent = next;
+  }
+}
+
+// ============= ADD DOCUMENT =============
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+uploadZone.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', e => addFiles(e.target.files));
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('dragover');
+  addFiles(e.dataTransfer.files);
+});
+
+document.querySelectorAll('[data-source]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('[data-source]').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const src = btn.dataset.source;
+    document.getElementById('fileSource').style.display = src === 'file' ? 'block' : 'none';
+    document.getElementById('cameraSource').style.display = src === 'camera' ? 'block' : 'none';
+    if (src !== 'camera') stopCamera();
+  });
+});
+
+function addFiles(fileList) {
+  for (const f of fileList) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      pendingFiles.push({ name: f.name, type: f.type, size: f.size, data: e.target.result });
+      renderPreview();
+    };
+    reader.readAsDataURL(f);
+  }
+}
+
+function renderPreview() {
+  const list = document.getElementById('previewList');
+  list.innerHTML = pendingFiles.map((f, i) => `
+    <div class="preview-item">
+      <div class="file-icon"><svg class="icon-lg"><use href="#${getFileIcon(f.type)}"/></svg></div>
+      <div class="file-info">
+        <div class="file-name">${escapeHtml(f.name)}</div>
+        <div class="file-size">${formatSize(f.size)} · ${escapeHtml(f.type || 'غير معروف')}</div>
+      </div>
+      <button class="btn btn-ghost-danger btn-sm btn-icon-only" onclick="removeFile(${i})" title="حذف">
+        <svg class="icon"><use href="#i-trash"/></svg>
+      </button>
+    </div>
+  `).join('');
+}
+
+function removeFile(i) {
+  pendingFiles.splice(i, 1);
+  renderPreview();
+}
+
+async function startCamera() {
+  try {
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    const video = document.getElementById('scannerVideo');
+    video.srcObject = cameraStream;
+    video.style.display = 'block';
+    document.getElementById('startCameraBtn').style.display = 'none';
+    document.getElementById('captureBtn').style.display = 'inline-flex';
+    document.getElementById('stopCameraBtn').style.display = 'inline-flex';
+  } catch (e) {
+    toast('تعذر الوصول للكاميرا: ' + e.message, 'error');
+  }
+}
+
+function captureImage() {
+  const video = document.getElementById('scannerVideo');
+  const canvas = document.getElementById('scannerCanvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  const data = canvas.toDataURL('image/jpeg', 0.85);
+  const name = `scan_${Date.now()}.jpg`;
+  pendingFiles.push({ name, type: 'image/jpeg', size: data.length, data });
+  renderPreview();
+  toast('تم التقاط الصورة', 'success');
+}
+
+function stopCamera() {
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(t => t.stop());
+    cameraStream = null;
+  }
+  const video = document.getElementById('scannerVideo');
+  video.srcObject = null;
+  video.style.display = 'none';
+  document.getElementById('startCameraBtn').style.display = 'inline-flex';
+  document.getElementById('captureBtn').style.display = 'none';
+  document.getElementById('stopCameraBtn').style.display = 'none';
+}
+
+function resetAddForm() {
+  pendingFiles = [];
+  renderPreview();
+  document.getElementById('docTitle').value = '';
+  document.getElementById('docOutgoing').value = '';
+  document.getElementById('docIncoming').value = '';
+  document.getElementById('docBookNumber').value = '';
+  document.getElementById('docTags').value = '';
+  document.getElementById('docDescription').value = '';
+  document.getElementById('docCategory').value = 'عام';
+  const now = new Date();
+  document.getElementById('docYear').value = now.getFullYear();
+  document.getElementById('docMonth').value = now.getMonth() + 1;
+  document.getElementById('docDay').value = now.getDate();
+  updateNextCodePreview();
+}
+
+function updateNextCodePreview() {
+  if (!currentUser) return;
+  const u = query("SELECT user_code, doc_counter FROM users WHERE id = ?", [currentUser.id])[0];
+  if (!u) return;
+  const next = `${u.user_code}-${String((u.doc_counter || 0) + 1).padStart(5, '0')}`;
+  const el = document.getElementById('nextCodePreview');
+  if (el) el.textContent = next;
+}
+
+function saveDocument() {
+  const title = document.getElementById('docTitle').value.trim();
+  if (!title) { toast('أدخل عنوان الوثيقة', 'error'); return; }
+  if (pendingFiles.length === 0) { toast('أضف ملف واحد على الأقل', 'error'); return; }
+
+  const outgoing = document.getElementById('docOutgoing').value.trim();
+  const incoming = document.getElementById('docIncoming').value.trim();
+  const bookNumber = document.getElementById('docBookNumber').value.trim();
+  const category = document.getElementById('docCategory').value;
+  const tags = document.getElementById('docTags').value.trim();
+  const description = document.getElementById('docDescription').value.trim();
+  const year = parseInt(document.getElementById('docYear').value) || new Date().getFullYear();
+  const month = parseInt(document.getElementById('docMonth').value) || new Date().getMonth() + 1;
+  const day = parseInt(document.getElementById('docDay').value) || new Date().getDate();
+
+  const u = query("SELECT user_code, doc_counter FROM users WHERE id = ?", [currentUser.id])[0];
+  const nextSeq = (u.doc_counter || 0) + 1;
+  const code = `${u.user_code}-${String(nextSeq).padStart(5, '0')}`;
+
+  db.run(
+    `INSERT INTO documents (code, title, outgoing_number, incoming_number, book_number, category, tags, description, year, month, day, uploaded_by, uploaded_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [code, title, outgoing, incoming, bookNumber, category, tags, description, year, month, day, currentUser.id, new Date().toISOString()]
+  );
+  const docId = query("SELECT last_insert_rowid() as id")[0].id;
+  db.run("UPDATE users SET doc_counter = ? WHERE id = ?", [nextSeq, currentUser.id]);
+
+  for (const f of pendingFiles) {
+    db.run(
+      "INSERT INTO files (doc_id, name, type, size, data) VALUES (?, ?, ?, ?, ?)",
+      [docId, f.name, f.type, f.size, f.data]
+    );
+  }
+  saveDB();
+  logActivity('إضافة وثيقة', `الكود: ${code} | العنوان: ${title}`);
+  showSavedCode(code, title);
+  resetAddForm();
+}
+
+function showSavedCode(code, title) {
+  const t = document.getElementById('toast');
+  t.innerHTML = `
+    <svg class="icon"><use href="#i-check"/></svg>
+    <div style="text-align:right;">
+      <div style="font-weight:600">تم الحفظ بنجاح</div>
+      <div style="font-size:11px; opacity:0.85; margin-top:2px;">الكود: <code style="background:rgba(255,255,255,0.18); padding:1px 5px; border-radius:3px; font-family:Consolas,monospace;">${code}</code></div>
+    </div>`;
+  t.className = 'toast show success';
+  setTimeout(() => t.className = 'toast', 5000);
+}
+
+// ============= ARCHIVE TREE =============
+function renderArchiveTree() {
+  const years = query("SELECT DISTINCT year FROM documents ORDER BY year DESC");
+  if (years.length === 0) {
+    document.getElementById('archiveTree').innerHTML = `
+      <div class="empty">
+        <div class="empty-icon"><svg class="icon-xl"><use href="#i-folder"/></svg></div>
+        <div class="empty-title">لا توجد وثائق في الأرشيف</div>
+        <div class="empty-text">ابدأ بإضافة وثيقة جديدة</div>
+      </div>`;
+    return;
+  }
+  let html = '<div class="tree-container">';
+  for (const y of years) {
+    const yearCount = query("SELECT COUNT(*) as c FROM documents WHERE year = ?", [y.year])[0].c;
+    html += `<div class="tree-year">
+      <div class="tree-year-header" onclick="toggle(this)">
+        <span style="display:flex; align-items:center; gap:8px;">
+          <svg class="icon"><use href="#i-chevron"/></svg>
+          ${y.year}
+        </span>
+        <span class="badge badge-neutral" style="background:rgba(255,255,255,0.15); border-color:rgba(255,255,255,0.2); color:white;">${yearCount} وثيقة</span>
+      </div>
+      <div class="tree-children tree-collapsed">`;
+    const months = query("SELECT DISTINCT month FROM documents WHERE year = ? ORDER BY month DESC", [y.year]);
+    for (const m of months) {
+      const mCount = query("SELECT COUNT(*) as c FROM documents WHERE year = ? AND month = ?", [y.year, m.month])[0].c;
+      const mName = monthName(m.month);
+      html += `<div class="tree-month">
+        <div class="tree-month-header" onclick="toggle(this)">
+          <span style="display:flex; align-items:center; gap:8px;">
+            <svg class="icon"><use href="#i-chevron"/></svg>
+            ${mName}
+          </span>
+          <span class="badge badge-neutral">${mCount}</span>
+        </div>
+        <div class="tree-children tree-collapsed">`;
+      const days = query("SELECT DISTINCT day FROM documents WHERE year = ? AND month = ? ORDER BY day DESC", [y.year, m.month]);
+      for (const d of days) {
+        const dCount = query("SELECT COUNT(*) as c FROM documents WHERE year = ? AND month = ? AND day = ?", [y.year, m.month, d.day])[0].c;
+        html += `<div class="tree-day">
+          <div class="tree-day-header" onclick="toggle(this)">
+            <span style="display:flex; align-items:center; gap:8px;">
+              <svg class="icon"><use href="#i-chevron"/></svg>
+              يوم ${d.day}
+            </span>
+            <span class="badge badge-neutral">${dCount}</span>
+          </div>
+          <div class="tree-children tree-collapsed">`;
+        const docs = query(`
+          SELECT d.*, u.name as user_name FROM documents d
+          JOIN users u ON d.uploaded_by = u.id
+          WHERE d.year = ? AND d.month = ? AND d.day = ?
+          ORDER BY d.uploaded_at DESC
+        `, [y.year, m.month, d.day]);
+        for (const doc of docs) {
+          html += renderDocCard(doc);
+        }
+        html += '</div></div>';
+      }
+      html += '</div></div>';
+    }
+    html += '</div></div>';
+  }
+  html += '</div>';
+  document.getElementById('archiveTree').innerHTML = html;
+}
+
+function renderDocCard(d) {
+  return `<div class="doc-card">
+    <div class="doc-icon-wrap"><svg class="icon-lg"><use href="#i-file"/></svg></div>
+    <div class="doc-info">
+      <div class="doc-title">
+        <code style="background:var(--primary); color:var(--gold); padding:2px 7px; border-radius:4px; font-weight:700; font-size:11px; margin-left:8px;">${escapeHtml(d.code || '---')}</code>
+        ${escapeHtml(d.title)}
+      </div>
+      <div class="doc-meta">
+        <span class="badge badge-success">${escapeHtml(d.category || 'عام')}</span>
+        <span class="doc-meta-item">${d.day}/${d.month}/${d.year}</span>
+        ${d.outgoing_number ? `<span class="doc-meta-item">صادر: ${escapeHtml(d.outgoing_number)}</span>` : ''}
+        ${d.incoming_number ? `<span class="doc-meta-item">وارد: ${escapeHtml(d.incoming_number)}</span>` : ''}
+        ${d.book_number ? `<span class="doc-meta-item">كتاب: ${escapeHtml(d.book_number)}</span>` : ''}
+        <span class="doc-meta-item">${escapeHtml(d.user_name || '')}</span>
+      </div>
+    </div>
+    <div class="doc-actions">
+      <button class="btn btn-ghost btn-sm" onclick="viewDocument(${d.id})" title="عرض">
+        <svg class="icon"><use href="#i-eye"/></svg>عرض
+      </button>
+      <button class="btn btn-ghost btn-sm btn-icon-only" onclick="printDocument(${d.id})" title="طباعة">
+        <svg class="icon"><use href="#i-printer"/></svg>
+      </button>
+      ${currentUser.role === 'admin' ? `<button class="btn btn-ghost-danger btn-sm btn-icon-only" onclick="deleteDocument(${d.id})" title="حذف">
+        <svg class="icon"><use href="#i-trash"/></svg>
+      </button>` : ''}
+    </div>
+  </div>`;
+}
+
+function toggle(headerEl) {
+  const children = headerEl.nextElementSibling;
+  if (children) {
+    children.classList.toggle('tree-collapsed');
+    headerEl.classList.toggle('tree-expanded');
+  }
+}
+
+function monthName(m) {
+  return ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'][m-1] || m;
+}
+
+// ============= SEARCH =============
+function initSearchPage() {
+  const cats = query("SELECT DISTINCT category FROM documents WHERE category IS NOT NULL");
+  const sel = document.getElementById('filterCategory');
+  sel.innerHTML = '<option value="">الكل</option>' +
+    cats.map(c => `<option value="${escapeHtml(c.category)}">${escapeHtml(c.category)}</option>`).join('');
+  performSearch();
+}
+
+document.getElementById('searchInput').addEventListener('input', () => performSearch());
+document.getElementById('filterCategory').addEventListener('change', () => performSearch());
+document.getElementById('filterFrom').addEventListener('change', () => performSearch());
+document.getElementById('filterTo').addEventListener('change', () => performSearch());
+
+function performSearch() {
+  const q = document.getElementById('searchInput').value.trim();
+  const cat = document.getElementById('filterCategory').value;
+  const from = document.getElementById('filterFrom').value;
+  const to = document.getElementById('filterTo').value;
+
+  let sql = `SELECT d.*, u.name as user_name FROM documents d JOIN users u ON d.uploaded_by = u.id WHERE 1=1`;
+  const params = [];
+  if (q) {
+    sql += ` AND (d.code LIKE ? OR d.title LIKE ? OR d.description LIKE ? OR d.tags LIKE ? OR d.outgoing_number LIKE ? OR d.incoming_number LIKE ? OR d.book_number LIKE ? OR d.category LIKE ? OR u.name LIKE ?)`;
+    const like = '%' + q + '%';
+    params.push(like, like, like, like, like, like, like, like, like);
+  }
+  if (cat) { sql += ` AND d.category = ?`; params.push(cat); }
+  if (from) {
+    const [fy, fm, fd] = from.split('-').map(Number);
+    sql += ` AND (d.year > ? OR (d.year = ? AND d.month > ?) OR (d.year = ? AND d.month = ? AND d.day >= ?))`;
+    params.push(fy, fy, fm, fy, fm, fd);
+  }
+  if (to) {
+    const [ty, tm, td] = to.split('-').map(Number);
+    sql += ` AND (d.year < ? OR (d.year = ? AND d.month < ?) OR (d.year = ? AND d.month = ? AND d.day <= ?))`;
+    params.push(ty, ty, tm, ty, tm, td);
+  }
+  sql += ` ORDER BY d.year DESC, d.month DESC, d.day DESC, d.id DESC`;
+
+  const results = query(sql, params);
+  const html = results.length === 0
+    ? `<div class="empty">
+        <div class="empty-icon"><svg class="icon-xl"><use href="#i-search"/></svg></div>
+        <div class="empty-title">لا توجد نتائج</div>
+        <div class="empty-text">جرب تغيير كلمات البحث أو الفلاتر</div>
+      </div>`
+    : `<div class="card">
+        <div class="card-header">
+          <div class="card-title">النتائج <span class="badge badge-neutral" style="margin-right:6px;">${results.length}</span></div>
+        </div>
+        ${results.map(d => {
+          const card = renderDocCard(d);
+          return q ? card.replace(escapeHtml(d.title), highlight(escapeHtml(d.title), q)) : card;
+        }).join('')}
+      </div>`;
+  document.getElementById('searchResults').innerHTML = html;
+}
+
+function highlight(text, q) {
+  if (!q) return text;
+  const re = new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')', 'gi');
+  return text.replace(re, '<mark>$1</mark>');
+}
+
+// ============= VIEW / DELETE DOCUMENT =============
+function viewDocument(id) {
+  const doc = query("SELECT d.*, u.name as user_name FROM documents d JOIN users u ON d.uploaded_by = u.id WHERE d.id = ?", [id])[0];
+  if (!doc) return;
+  const files = query("SELECT * FROM files WHERE doc_id = ?", [id]);
+  document.getElementById('docViewTitle').innerHTML = `<code style="background:var(--primary); color:var(--gold); padding:3px 9px; border-radius:5px; font-size:13px; font-weight:700; margin-left:10px;">${escapeHtml(doc.code || '---')}</code>${escapeHtml(doc.title)}`;
+  let html = `
+    <div style="display:flex; gap:8px; margin-bottom:14px;">
+      <button class="btn btn-primary" onclick="printDocument(${doc.id})">
+        <svg class="icon"><use href="#i-printer"/></svg>طباعة الوثيقة
+      </button>
+      ${currentUser.role === 'admin' ? `<button class="btn btn-ghost-danger" onclick="deleteDocument(${doc.id}); closeModal('docViewModal');">
+        <svg class="icon"><use href="#i-trash"/></svg>حذف
+      </button>` : ''}
+    </div>`;
+  html += `
+    <div style="background:var(--surface-2); padding:14px; border-radius:var(--radius-md); margin-bottom:14px; font-size:13px;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div><span style="color:var(--text-muted)">كود الوثيقة:</span> <code style="background:var(--accent-light); color:var(--accent); padding:1px 6px; border-radius:3px; font-weight:700;">${escapeHtml(doc.code || '---')}</code></div>
+        <div><span style="color:var(--text-muted)">التصنيف:</span> ${escapeHtml(doc.category || '-')}</div>
+        <div><span style="color:var(--text-muted)">التاريخ:</span> ${doc.day}/${doc.month}/${doc.year}</div>
+        <div><span style="color:var(--text-muted)">أُضيفت بواسطة:</span> ${escapeHtml(doc.user_name)}</div>
+        ${doc.outgoing_number ? `<div><span style="color:var(--text-muted)">رقم الصادر:</span> <code>${escapeHtml(doc.outgoing_number)}</code></div>` : ''}
+        ${doc.incoming_number ? `<div><span style="color:var(--text-muted)">رقم الوارد:</span> <code>${escapeHtml(doc.incoming_number)}</code></div>` : ''}
+        ${doc.book_number ? `<div><span style="color:var(--text-muted)">رقم الكتاب:</span> <code>${escapeHtml(doc.book_number)}</code></div>` : ''}
+      </div>
+      ${doc.tags ? `<div style="margin-top:10px;"><span style="color:var(--text-muted)">الوسوم:</span> ${escapeHtml(doc.tags)}</div>` : ''}
+      ${doc.description ? `<div style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border);"><span style="color:var(--text-muted)">الوصف:</span><br>${escapeHtml(doc.description)}</div>` : ''}
+      <div style="margin-top:10px; color:var(--text-muted); font-size:11px;">${new Date(doc.uploaded_at).toLocaleString('ar-IQ')}</div>
+    </div>
+    <div style="font-size:13px; font-weight:600; margin-bottom:10px;">الملفات (${files.length})</div>
+  `;
+  for (const f of files) {
+    const isImg = f.type && f.type.startsWith('image/');
+    html += `<div class="preview-item">
+      <div class="file-icon"><svg class="icon-lg"><use href="#${getFileIcon(f.type)}"/></svg></div>
+      <div class="file-info">
+        <div class="file-name">${escapeHtml(f.name)}</div>
+        <div class="file-size">${formatSize(f.size)}</div>
+        ${isImg ? `<img src="${f.data}" style="max-width:100%; max-height:300px; margin-top:10px; border-radius:var(--radius); border:1px solid var(--border);">` : ''}
+      </div>
+      <a href="${f.data}" download="${escapeHtml(f.name)}" class="btn btn-accent btn-sm">
+        <svg class="icon"><use href="#i-download"/></svg>تحميل
+      </a>
+    </div>`;
+  }
+  document.getElementById('docViewBody').innerHTML = html;
+  openModal('docViewModal');
+  logActivity('عرض وثيقة', `العنوان: ${doc.title}`);
+}
+
+function printDocument(id) {
+  const doc = query("SELECT d.*, u.name as user_name FROM documents d JOIN users u ON d.uploaded_by = u.id WHERE d.id = ?", [id])[0];
+  if (!doc) return;
+  const files = query("SELECT * FROM files WHERE doc_id = ?", [id]);
+  const customLogo = localStorage.getItem(LOGO_KEY);
+  const logoSrc = customLogo || 'logo.svg';
+
+  const filesHtml = files.map(f => {
+    const isImg = f.type && f.type.startsWith('image/');
+    return isImg
+      ? `<div class="file-block"><img src="${f.data}" alt="${escapeHtml(f.name)}"><div class="file-name">${escapeHtml(f.name)}</div></div>`
+      : `<div class="file-attachment">📎 ${escapeHtml(f.name)} <span style="color:#666">(${formatSize(f.size)})</span></div>`;
+  }).join('');
+
+  const w = window.open('', '_blank', 'width=900,height=700');
+  w.document.write(`<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>${escapeHtml(doc.code)} · ${escapeHtml(doc.title)}</title>
+<style>
+@page { size: A4; margin: 1.5cm; }
+* { box-sizing: border-box; }
+body {
+  font-family: 'Arial', 'Tahoma', sans-serif; color: #1a1a1a;
+  line-height: 1.7; margin: 0; padding: 24px; background: white;
+}
+.print-header {
+  display: flex; align-items: center; gap: 18px;
+  padding-bottom: 16px; margin-bottom: 24px;
+  border-bottom: 3px double #0d3b2e;
+}
+.print-logo {
+  width: 80px; height: 80px; border-radius: 50%;
+  border: 2px solid #c9a961; object-fit: cover; background: white;
+}
+.print-org-title { font-size: 18px; font-weight: bold; color: #0d3b2e; }
+.print-org-sub { color: #b8860b; font-size: 13px; margin-top: 3px; font-weight: 600; }
+.print-code-stamp {
+  background: #0d3b2e; color: #c9a961;
+  padding: 8px 16px; border-radius: 6px;
+  font-family: 'Consolas', monospace; font-size: 17px; font-weight: bold;
+  border: 1.5px solid #c9a961; letter-spacing: 1px;
+}
+.print-doc-title {
+  font-size: 22px; font-weight: bold; color: #0d3b2e;
+  margin-bottom: 16px; padding-bottom: 8px; border-bottom: 1px solid #ddd;
+}
+.print-meta {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px;
+  padding: 14px 16px; background: #f5f5f0;
+  border: 1px solid #e0ddd2; border-radius: 6px; margin-bottom: 18px;
+  font-size: 13px;
+}
+.print-meta div { padding: 3px 0; }
+.print-meta b { color: #0d3b2e; min-width: 100px; display: inline-block; }
+.section-title {
+  font-size: 14px; font-weight: bold; color: #0d3b2e;
+  margin: 18px 0 10px; padding: 6px 10px;
+  background: #0d3b2e; color: #c9a961; border-radius: 4px;
+}
+.description-box {
+  padding: 12px 14px; background: #fafaf5; border-right: 3px solid #c9a961;
+  border-radius: 4px; font-size: 13px; line-height: 1.8;
+}
+.file-block { margin: 14px 0; page-break-inside: avoid; text-align: center; }
+.file-block img {
+  max-width: 100%; max-height: 600px;
+  border: 1px solid #ccc; padding: 4px; background: white;
+}
+.file-name {
+  font-size: 11px; color: #666; margin-top: 4px;
+  font-family: 'Consolas', monospace;
+}
+.file-attachment {
+  padding: 10px 14px; border: 1px solid #ddd;
+  border-radius: 4px; margin: 6px 0; background: #fafaf5;
+  font-size: 13px;
+}
+.print-footer {
+  margin-top: 30px; padding-top: 14px;
+  border-top: 1px dashed #999; text-align: center;
+  color: #888; font-size: 11px;
+}
+.print-footer code {
+  background: #f0f0e8; padding: 1px 5px; border-radius: 3px;
+  font-family: 'Consolas', monospace;
+}
+.action-bar {
+  position: fixed; top: 12px; left: 12px; display: flex; gap: 8px;
+  background: white; padding: 8px; border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+.action-bar button {
+  background: #0d3b2e; color: white; border: none;
+  padding: 8px 16px; border-radius: 4px; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 600;
+}
+.action-bar button.cancel { background: #999; }
+@media print {
+  body { padding: 0; }
+  .action-bar { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="action-bar">
+  <button onclick="window.print()">🖨️ طباعة</button>
+  <button onclick="window.close()" class="cancel">إغلاق</button>
+</div>
+
+<div class="print-header">
+  <img src="${escapeHtml(logoSrc)}" class="print-logo" onerror="this.style.display='none'">
+  <div style="flex:1;">
+    <div class="print-org-title">جمهورية العراق · مجلس النواب</div>
+    <div class="print-org-sub">نظام الأرشفة الإلكترونية</div>
+  </div>
+  <div class="print-code-stamp">${escapeHtml(doc.code)}</div>
+</div>
+
+<div class="print-doc-title">${escapeHtml(doc.title)}</div>
+
+<div class="print-meta">
+  <div><b>التصنيف:</b> ${escapeHtml(doc.category || '-')}</div>
+  <div><b>التاريخ:</b> ${doc.day}/${doc.month}/${doc.year}</div>
+  ${doc.outgoing_number ? `<div><b>رقم الصادر:</b> ${escapeHtml(doc.outgoing_number)}</div>` : ''}
+  ${doc.incoming_number ? `<div><b>رقم الوارد:</b> ${escapeHtml(doc.incoming_number)}</div>` : ''}
+  ${doc.book_number ? `<div><b>رقم الكتاب:</b> ${escapeHtml(doc.book_number)}</div>` : ''}
+  <div><b>الموظف المسؤول:</b> ${escapeHtml(doc.user_name)}</div>
+  ${doc.tags ? `<div style="grid-column:1/-1;"><b>الوسوم:</b> ${escapeHtml(doc.tags)}</div>` : ''}
+  <div style="grid-column:1/-1; color:#666; font-size:11px; padding-top:6px; border-top:1px dashed #ccc; margin-top:4px;">
+    وقت الإضافة: ${new Date(doc.uploaded_at).toLocaleString('ar-IQ')}
+  </div>
+</div>
+
+${doc.description ? `
+  <div class="section-title">الوصف</div>
+  <div class="description-box">${escapeHtml(doc.description)}</div>
+` : ''}
+
+${files.length > 0 ? `
+  <div class="section-title">المرفقات (${files.length})</div>
+  ${filesHtml}
+` : ''}
+
+<div class="print-footer">
+  تمت الطباعة في <code>${new Date().toLocaleString('ar-IQ')}</code> · رقم المرجع: <code>${escapeHtml(doc.code)}</code><br>
+  <span style="color:#0d3b2e; font-weight:600;">مجلس النواب العراقي - نظام الأرشفة الإلكترونية</span>
+</div>
+</body>
+</html>`);
+  w.document.close();
+  w.onload = () => { setTimeout(() => w.focus(), 200); };
+  logActivity('طباعة وثيقة', `الكود: ${doc.code} | العنوان: ${doc.title}`);
+}
+
+function deleteDocument(id) {
+  if (!confirm('هل تريد حذف هذه الوثيقة وكل ملفاتها؟')) return;
+  const doc = query("SELECT title FROM documents WHERE id = ?", [id])[0];
+  execute("DELETE FROM files WHERE doc_id = ?", [id]);
+  execute("DELETE FROM documents WHERE id = ?", [id]);
+  logActivity('حذف وثيقة', `العنوان: ${doc?.title}`);
+  toast('تم الحذف', 'success');
+  if (document.getElementById('page-archive').style.display !== 'none') renderArchiveTree();
+  if (document.getElementById('page-search').style.display !== 'none') performSearch();
+}
+
+// ============= USERS =============
+function renderUsers() {
+  const users = query("SELECT * FROM users ORDER BY CAST(user_code AS INTEGER)");
+  document.getElementById('usersTableBody').innerHTML = users.map(u => `
+    <tr>
+      <td><code style="background:var(--accent-light); color:var(--accent); border:1px solid #fde68a; font-weight:700;">${escapeHtml(u.user_code || '---')}</code></td>
+      <td>${escapeHtml(u.name)}</td>
+      <td><code>${escapeHtml(u.username)}</code></td>
+      <td><span class="badge badge-${u.role}">${u.role === 'admin' ? 'مدير' : 'مستخدم'}</span></td>
+      <td><span class="badge badge-neutral">${u.doc_counter || 0} وثيقة</span></td>
+      <td>${new Date(u.created_at).toLocaleDateString('ar-IQ')}</td>
+      <td style="text-align:left;">
+        <button class="btn btn-ghost btn-sm" onclick="resetUserPassword(${u.id})">
+          <svg class="icon"><use href="#i-key"/></svg>إعادة تعيين
+        </button>
+        ${u.id !== currentUser.id ? `<button class="btn btn-ghost-danger btn-sm btn-icon-only" onclick="deleteUser(${u.id})" title="حذف">
+          <svg class="icon"><use href="#i-trash"/></svg>
+        </button>` : ''}
+      </td>
+    </tr>
+  `).join('');
+}
+
+function openCreateUserModal() {
+  document.getElementById('newUserName').value = '';
+  document.getElementById('newUserRole').value = 'user';
+  document.getElementById('newCredentials').style.display = 'none';
+  openModal('createUserModal');
+}
+
+function generateUsername() {
+  const base = 'user';
+  const num = Math.floor(1000 + Math.random() * 9000);
+  return base + num;
+}
+
+function generatePassword() {
+  const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let pw = '';
+  for (let i = 0; i < 10; i++) pw += chars[Math.floor(Math.random() * chars.length)];
+  return pw;
+}
+
+function createUser() {
+  const name = document.getElementById('newUserName').value.trim();
+  if (!name) { toast('أدخل الاسم', 'error'); return; }
+  const role = document.getElementById('newUserRole').value;
+  let username, attempts = 0;
+  do {
+    username = generateUsername();
+    attempts++;
+    if (attempts > 50) { username += '_' + Date.now(); break; }
+  } while (query("SELECT id FROM users WHERE username = ?", [username]).length > 0);
+  const password = generatePassword();
+  const userCode = generateUserCode();
+  execute(
+    "INSERT INTO users (username, password, name, role, user_code, doc_counter, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    [username, hashPassword(password), name, role, userCode, 0, new Date().toISOString()]
+  );
+  logActivity('إنشاء مستخدم', `الكود: ${userCode} | الاسم: ${name} | اسم المستخدم: ${username}`);
+  document.getElementById('newCredentials').innerHTML = `
+    <div class="credentials-display">
+      <div class="alert">
+        <svg class="icon"><use href="#i-check"/></svg>
+        تم إنشاء الحساب بنجاح
+      </div>
+      <div class="warn">
+        <svg class="icon" style="display:inline-block; vertical-align:middle"><use href="#i-alert"/></svg>
+        احفظ هذه البيانات الآن، لن تظهر مرة أخرى
+      </div>
+      <div class="row"><span class="label">كود المستخدم</span><span class="value" style="color:var(--accent)">${userCode}</span></div>
+      <div class="row"><span class="label">الاسم</span><span class="value">${escapeHtml(name)}</span></div>
+      <div class="row"><span class="label">اسم المستخدم</span><span class="value">${username}</span></div>
+      <div class="row"><span class="label">كلمة المرور</span><span class="value">${password}</span></div>
+      <div class="row"><span class="label">الصلاحية</span><span class="value">${role === 'admin' ? 'مدير' : 'مستخدم'}</span></div>
+      <div style="margin-top:10px; padding:8px; background:var(--accent-light); border:1px solid #fde68a; border-radius:6px; font-size:11px; color:var(--text); font-family:'IBM Plex Sans Arabic',sans-serif;">
+        ℹ️ كل وثيقة يحفظها هذا المستخدم ستحمل كود مثل: <code>${userCode}-00001</code>, <code>${userCode}-00002</code> ...
+      </div>
+      <button class="btn btn-primary btn-block" style="margin-top:12px;"
+        onclick="copyCreds('${userCode}', '${username}', '${password}', '${escapeHtml(name)}')">
+        <svg class="icon"><use href="#i-copy"/></svg>نسخ كل البيانات
+      </button>
+    </div>
+  `;
+  document.getElementById('newCredentials').style.display = 'block';
+  renderUsers();
+}
+
+function copyCreds(code, u, p, name) {
+  const text = `بيانات الدخول - مجلس النواب العراقي\n\nالاسم: ${name}\nكود المستخدم: ${code}\nاسم المستخدم: ${u}\nكلمة المرور: ${p}`;
+  navigator.clipboard.writeText(text).then(() => toast('تم النسخ', 'success'));
+}
+
+function resetUserPassword(id) {
+  if (!confirm('إعادة توليد كلمة مرور جديدة؟')) return;
+  const password = generatePassword();
+  execute("UPDATE users SET password = ? WHERE id = ?", [hashPassword(password), id]);
+  const u = query("SELECT * FROM users WHERE id = ?", [id])[0];
+  logActivity('إعادة كلمة مرور', `للمستخدم: ${u.username}`);
+  alert(`كلمة المرور الجديدة لـ ${u.username}:\n\n${password}\n\nاحفظها الآن!`);
+}
+
+function deleteUser(id) {
+  if (!confirm('حذف هذا المستخدم؟')) return;
+  const u = query("SELECT * FROM users WHERE id = ?", [id])[0];
+  execute("DELETE FROM users WHERE id = ?", [id]);
+  logActivity('حذف مستخدم', `الاسم: ${u.username}`);
+  toast('تم الحذف', 'success');
+  renderUsers();
+}
+
+// ============= LOGS =============
+function renderLogs() {
+  const logs = query("SELECT * FROM activity_log ORDER BY id DESC LIMIT 500");
+  document.getElementById('logsTableBody').innerHTML = logs.length === 0
+    ? '<tr><td colspan="4" style="text-align:center;color:var(--text-muted); padding:40px;">لا يوجد سجل</td></tr>'
+    : logs.map(l => `
+      <tr>
+        <td><code>${new Date(l.timestamp).toLocaleString('ar-IQ')}</code></td>
+        <td>${escapeHtml(l.username || '-')}</td>
+        <td><span class="badge badge-neutral">${escapeHtml(l.action)}</span></td>
+        <td style="color:var(--text-muted);">${escapeHtml(l.details || '-')}</td>
+      </tr>
+    `).join('');
+}
+
+function clearLogs() {
+  if (!confirm('مسح كل السجل؟')) return;
+  execute("DELETE FROM activity_log");
+  logActivity('مسح السجل', '');
+  renderLogs();
+}
+
+// ============= BACKUP =============
+function exportDatabase() {
+  const data = db.export();
+  const blob = new Blob([data], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `archive_backup_${new Date().toISOString().split('T')[0]}.db`;
+  a.click();
+  URL.revokeObjectURL(url);
+  logActivity('تصدير نسخة احتياطية', '');
+  toast('تم التصدير', 'success');
+}
+
+function importDatabase(e) {
+  if (!confirm('سيتم استبدال قاعدة البيانات الحالية! هل أنت متأكد؟')) return;
+  const file = e.target.files[0];
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const arr = new Uint8Array(ev.target.result);
+      db = new SQL.Database(arr);
+      saveDB();
+      toast('تم الاستيراد. أعد تسجيل الدخول', 'success');
+      setTimeout(() => location.reload(), 1500);
+    } catch (e) {
+      toast('ملف غير صالح', 'error');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function resetSystem() {
+  if (!confirm('هذا سيمسح كل البيانات نهائياً! متأكد؟')) return;
+  if (!confirm('تأكيد أخير: حذف كل شيء؟')) return;
+  localStorage.removeItem(DB_KEY);
+  location.reload();
+}
+
+// ============= UTILS =============
+function getFileIcon(type) {
+  if (!type) return 'i-file';
+  if (type.startsWith('image/')) return 'i-image';
+  return 'i-file';
+}
+
+function formatSize(b) {
+  if (!b) return '0 B';
+  const k = 1024, units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(b) / Math.log(k));
+  return (b / Math.pow(k, i)).toFixed(1) + ' ' + units[i];
+}
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+function toast(msg, type = '') {
+  const t = document.getElementById('toast');
+  t.innerHTML = `
+    <svg class="icon"><use href="#${type === 'error' ? 'i-alert' : 'i-check'}"/></svg>
+    ${escapeHtml(msg)}`;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// ============= INIT =============
+(async () => {
+  await initDB();
+  applyCustomLogo();
+  const saved = sessionStorage.getItem('currentUser');
+  if (saved) {
+    currentUser = JSON.parse(saved);
+    showApp();
+  }
+})();
+</script>
+</body>
+</html>
