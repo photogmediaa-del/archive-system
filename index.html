@@ -1246,16 +1246,56 @@ mark {
         <input type="text" id="newUserName" class="form-control" placeholder="مثال: أحمد محمد">
       </div>
       <div class="form-group">
+        <label class="form-label">اسم المستخدم
+          <span style="color:var(--text-subtle); font-size:11px; font-weight:400;">(اتركه فارغ للتوليد التلقائي)</span>
+        </label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="newUsername" class="form-control" placeholder="user1234 — أحرف إنجليزية وأرقام">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('newUsername').value=generateUsername()" title="توليد تلقائي">
+            <svg class="icon"><use href="#i-refresh"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">كلمة المرور
+          <span style="color:var(--text-subtle); font-size:11px; font-weight:400;">(اتركها فارغة للتوليد التلقائي)</span>
+        </label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="newPassword" class="form-control" placeholder="4 أحرف على الأقل">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('newPassword').value=generatePassword()" title="توليد تلقائي">
+            <svg class="icon"><use href="#i-refresh"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">كود المستخدم
+          <span style="color:var(--text-subtle); font-size:11px; font-weight:400;">(اتركه فارغ للتوليد التلقائي)</span>
+        </label>
+        <div style="display:flex; gap:6px;">
+          <input type="text" id="newUserCode" class="form-control" placeholder="مثال: 002" maxlength="10">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="document.getElementById('newUserCode').value=generateUserCode()" title="توليد تلقائي">
+            <svg class="icon"><use href="#i-refresh"/></svg>
+          </button>
+        </div>
+        <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">يُستخدم في توليد أكواد وثائق المستخدم (مثل: <code>002-00001</code>)</div>
+      </div>
+      <div class="form-group">
         <label class="form-label">الصلاحية</label>
         <select id="newUserRole" class="form-control">
           <option value="user">مستخدم عادي</option>
           <option value="admin">مدير</option>
         </select>
       </div>
-      <button class="btn btn-primary btn-block" onclick="createUser()">
-        <svg class="icon"><use href="#i-shield"/></svg>
-        توليد الحساب وكلمة المرور
-      </button>
+      <div style="display:flex; gap:8px;">
+        <button class="btn btn-primary" style="flex:1" onclick="createUser()">
+          <svg class="icon"><use href="#i-check"/></svg>
+          إنشاء الحساب
+        </button>
+        <button class="btn btn-ghost" onclick="autoFillAllFields()" title="توليد كل البيانات تلقائياً">
+          <svg class="icon"><use href="#i-refresh"/></svg>
+          توليد الكل
+        </button>
+      </div>
       <div id="newCredentials" style="display:none;"></div>
     </div>
   </div>
@@ -2148,9 +2188,19 @@ function renderUsers() {
 
 function openCreateUserModal() {
   document.getElementById('newUserName').value = '';
+  document.getElementById('newUsername').value = '';
+  document.getElementById('newPassword').value = '';
+  document.getElementById('newUserCode').value = '';
   document.getElementById('newUserRole').value = 'user';
   document.getElementById('newCredentials').style.display = 'none';
   openModal('createUserModal');
+}
+
+function autoFillAllFields() {
+  document.getElementById('newUsername').value = generateUsername();
+  document.getElementById('newPassword').value = generatePassword();
+  document.getElementById('newUserCode').value = generateUserCode();
+  toast('تم توليد البيانات', 'success');
 }
 
 function generateUsername() {
@@ -2168,16 +2218,42 @@ function generatePassword() {
 
 function createUser() {
   const name = document.getElementById('newUserName').value.trim();
-  if (!name) { toast('أدخل الاسم', 'error'); return; }
+  if (!name) { toast('أدخل الاسم الكامل', 'error'); return; }
   const role = document.getElementById('newUserRole').value;
-  let username, attempts = 0;
-  do {
-    username = generateUsername();
-    attempts++;
-    if (attempts > 50) { username += '_' + Date.now(); break; }
-  } while (query("SELECT id FROM users WHERE username = ?", [username]).length > 0);
-  const password = generatePassword();
-  const userCode = generateUserCode();
+
+  let username = document.getElementById('newUsername').value.trim();
+  if (username) {
+    if (!/^[a-zA-Z0-9_.-]{3,30}$/.test(username)) {
+      toast('اسم المستخدم: أحرف إنجليزية/أرقام (3-30 حرف)', 'error'); return;
+    }
+    if (query("SELECT id FROM users WHERE username = ?", [username]).length > 0) {
+      toast('اسم المستخدم موجود سابقاً', 'error'); return;
+    }
+  } else {
+    let attempts = 0;
+    do {
+      username = generateUsername();
+      attempts++;
+      if (attempts > 50) { username += '_' + Date.now(); break; }
+    } while (query("SELECT id FROM users WHERE username = ?", [username]).length > 0);
+  }
+
+  let password = document.getElementById('newPassword').value;
+  if (password) {
+    if (password.length < 4) { toast('كلمة المرور يجب أن تكون 4 أحرف على الأقل', 'error'); return; }
+  } else {
+    password = generatePassword();
+  }
+
+  let userCode = document.getElementById('newUserCode').value.trim();
+  if (userCode) {
+    if (query("SELECT id FROM users WHERE user_code = ?", [userCode]).length > 0) {
+      toast('كود المستخدم موجود سابقاً', 'error'); return;
+    }
+  } else {
+    userCode = generateUserCode();
+  }
+
   execute(
     "INSERT INTO users (username, password, name, role, user_code, doc_counter, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
     [username, hashPassword(password), name, role, userCode, 0, new Date().toISOString()]
