@@ -751,7 +751,7 @@ mark {
         <div class="user-pill-info">
           <div class="user-pill-name" id="userName"></div>
           <div class="user-pill-meta">
-            <span id="userRole"></span> · <code id="userCodeBadge"></code>
+            <span id="userRole"></span>
           </div>
         </div>
       </div>
@@ -1491,7 +1491,6 @@ function showApp() {
   document.getElementById('userName').textContent = currentUser.name;
   document.getElementById('userRole').textContent = currentUser.role === 'admin' ? 'مدير' : 'مستخدم';
   document.getElementById('userAvatar').textContent = (currentUser.name || 'U').charAt(0);
-  document.getElementById('userCodeBadge').textContent = currentUser.user_code || '---';
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = currentUser.role === 'admin' ? '' : 'none';
   });
