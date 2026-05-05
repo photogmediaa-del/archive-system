@@ -500,6 +500,26 @@ mark {
   background: #fef08a; padding: 0 2px; border-radius: 2px; color: var(--text);
 }
 
+/* Permissions list */
+.perm-list {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px;
+  max-height: 240px; overflow-y: auto;
+}
+.perm-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  cursor: pointer; transition: var(--transition);
+  font-size: 12px;
+}
+.perm-item:hover { border-color: var(--accent); }
+.perm-item input[type="checkbox"] { margin: 0; cursor: pointer; accent-color: var(--accent); }
+.perm-item.checked { background: var(--accent-light); border-color: var(--accent); }
+.perm-item .perm-icon { width: 14px; height: 14px; color: var(--accent); flex-shrink: 0; }
+.perm-item label { cursor: pointer; flex: 1; user-select: none; }
+
 
 /* Danger zone */
 .danger-zone {
@@ -1281,10 +1301,19 @@ mark {
       </div>
       <div class="form-group">
         <label class="form-label">الصلاحية</label>
-        <select id="newUserRole" class="form-control">
+        <select id="newUserRole" class="form-control" onchange="toggleNewPermissionsBox()">
           <option value="user">مستخدم عادي</option>
-          <option value="admin">مدير</option>
+          <option value="admin">مدير (كل الصلاحيات)</option>
         </select>
+      </div>
+      <div class="form-group" id="newPermissionsBox">
+        <label class="form-label">الصلاحيات المسموحة</label>
+        <div id="newPermissionsList" class="perm-list"></div>
+        <div style="display:flex; gap:6px; margin-top:6px;">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="setAllPermissions('new', true)">تحديد الكل</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="setAllPermissions('new', false)">إلغاء الكل</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="setDefaultPermissions('new')">الافتراضي</button>
+        </div>
       </div>
       <div style="display:flex; gap:8px;">
         <button class="btn btn-primary" style="flex:1" onclick="createUser()">
@@ -1343,10 +1372,19 @@ mark {
       </div>
       <div class="form-group">
         <label class="form-label">الصلاحية</label>
-        <select id="editUserRole" class="form-control">
+        <select id="editUserRole" class="form-control" onchange="toggleEditPermissionsBox()">
           <option value="user">مستخدم عادي</option>
-          <option value="admin">مدير</option>
+          <option value="admin">مدير (كل الصلاحيات)</option>
         </select>
+      </div>
+      <div class="form-group" id="editPermissionsBox">
+        <label class="form-label">الصلاحيات المسموحة</label>
+        <div id="editPermissionsList" class="perm-list"></div>
+        <div style="display:flex; gap:6px; margin-top:6px;">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="setAllPermissions('edit', true)">تحديد الكل</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="setAllPermissions('edit', false)">إلغاء الكل</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="setDefaultPermissions('edit')">الافتراضي</button>
+        </div>
       </div>
       <div style="display:flex; gap:8px; margin-top:8px;">
         <button class="btn btn-primary" style="flex:1" onclick="saveUserEdit()">
@@ -1443,12 +1481,42 @@ async function initDB() {
   if (saved) {
     const arr = Uint8Array.from(atob(saved), c => c.charCodeAt(0));
     db = new SQL.Database(arr);
+    try { db.run("ALTER TABLE users ADD COLUMN permissions TEXT"); saveDB(); } catch (e) {}
   } else {
     db = new SQL.Database();
     createSchema();
     seedAdmin();
     saveDB();
   }
+}
+
+const ALL_PERMISSIONS = [
+  { id: 'add_doc', label: 'إضافة وثائق جديدة', icon: 'i-plus', default: true },
+  { id: 'view_archive', label: 'تصفح الأرشيف بالتاريخ', icon: 'i-folder', default: true },
+  { id: 'search', label: 'البحث في الوثائق', icon: 'i-search', default: true },
+  { id: 'print', label: 'طباعة الوثائق', icon: 'i-printer', default: true },
+  { id: 'view_others', label: 'رؤية وثائق المستخدمين الآخرين', icon: 'i-eye', default: true },
+  { id: 'delete_doc', label: 'حذف الوثائق', icon: 'i-trash', default: false },
+  { id: 'manage_users', label: 'إدارة المستخدمين', icon: 'i-users', default: false },
+  { id: 'view_logs', label: 'عرض سجل النشاط', icon: 'i-clock', default: false },
+  { id: 'manage_db', label: 'النسخ الاحتياطية وقاعدة البيانات', icon: 'i-database', default: false }
+];
+
+function getDefaultPermissions() {
+  return ALL_PERMISSIONS.filter(p => p.default).map(p => p.id);
+}
+
+function getUserPermissions(user) {
+  if (!user) return [];
+  if (user.role === 'admin') return ALL_PERMISSIONS.map(p => p.id);
+  if (user.permissions) {
+    try { return JSON.parse(user.permissions); } catch (e) { return getDefaultPermissions(); }
+  }
+  return getDefaultPermissions();
+}
+
+function hasPermission(perm) {
+  return getUserPermissions(currentUser).includes(perm);
 }
 
 function createSchema() {
@@ -1461,6 +1529,7 @@ function createSchema() {
       role TEXT NOT NULL DEFAULT 'user',
       user_code TEXT UNIQUE NOT NULL,
       doc_counter INTEGER NOT NULL DEFAULT 0,
+      permissions TEXT,
       created_at TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS documents (
@@ -1589,14 +1658,43 @@ function showApp() {
   document.getElementById('userName').textContent = currentUser.name;
   document.getElementById('userRole').textContent = currentUser.role === 'admin' ? 'مدير' : 'مستخدم';
   document.getElementById('userAvatar').textContent = (currentUser.name || 'U').charAt(0);
+  applyPermissionsToUI();
+  showPage('home');
+}
+
+function applyPermissionsToUI() {
+  const map = {
+    'add_doc': ['[onclick="showPage(\'add\')"]'],
+    'view_archive': ['[onclick="showPage(\'archive\')"]'],
+    'search': ['[onclick="showPage(\'search\')"]'],
+    'manage_users': ['[onclick="showPage(\'users\')"]'],
+    'view_logs': ['[onclick="showPage(\'logs\')"]'],
+    'manage_db': ['[onclick="showPage(\'backup\')"]']
+  };
+  Object.entries(map).forEach(([perm, selectors]) => {
+    selectors.forEach(sel => {
+      document.querySelectorAll(sel).forEach(el => {
+        const card = el.closest('.home-card') || el;
+        card.style.display = hasPermission(perm) ? '' : 'none';
+      });
+    });
+  });
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = currentUser.role === 'admin' ? '' : 'none';
   });
-  showPage('home');
 }
 
 // ============= NAVIGATION =============
 function showPage(name) {
+  const permMap = {
+    add: 'add_doc', archive: 'view_archive', search: 'search',
+    users: 'manage_users', logs: 'view_logs', backup: 'manage_db'
+  };
+  const requiredPerm = permMap[name];
+  if (requiredPerm && !hasPermission(requiredPerm)) {
+    toast('ليست لديك صلاحية لفتح هذه الصفحة', 'error');
+    name = 'home';
+  }
   document.querySelectorAll('.page').forEach(p => p.style.display = 'none');
   const pageEl = document.getElementById('page-' + name);
   if (pageEl) pageEl.style.display = 'block';
@@ -1829,7 +1927,9 @@ function showSavedCode(code, title) {
 
 // ============= ARCHIVE TREE =============
 function renderArchiveTree() {
-  const years = query("SELECT DISTINCT year FROM documents ORDER BY year DESC");
+  const restrict = !hasPermission('view_others');
+  const baseWhere = restrict ? `uploaded_by = ${currentUser.id}` : '1=1';
+  const years = query(`SELECT DISTINCT year FROM documents WHERE ${baseWhere} ORDER BY year DESC`);
   if (years.length === 0) {
     document.getElementById('archiveTree').innerHTML = `
       <div class="empty">
@@ -1839,9 +1939,10 @@ function renderArchiveTree() {
       </div>`;
     return;
   }
+  const userClause = restrict ? ` AND uploaded_by = ${currentUser.id}` : '';
   let html = '<div class="tree-container">';
   for (const y of years) {
-    const yearCount = query("SELECT COUNT(*) as c FROM documents WHERE year = ?", [y.year])[0].c;
+    const yearCount = query(`SELECT COUNT(*) as c FROM documents WHERE year = ?${userClause}`, [y.year])[0].c;
     html += `<div class="tree-year">
       <div class="tree-year-header" onclick="toggle(this)">
         <span style="display:flex; align-items:center; gap:8px;">
@@ -1851,9 +1952,9 @@ function renderArchiveTree() {
         <span class="badge badge-neutral" style="background:rgba(255,255,255,0.15); border-color:rgba(255,255,255,0.2); color:white;">${yearCount} وثيقة</span>
       </div>
       <div class="tree-children tree-collapsed">`;
-    const months = query("SELECT DISTINCT month FROM documents WHERE year = ? ORDER BY month DESC", [y.year]);
+    const months = query(`SELECT DISTINCT month FROM documents WHERE year = ?${userClause} ORDER BY month DESC`, [y.year]);
     for (const m of months) {
-      const mCount = query("SELECT COUNT(*) as c FROM documents WHERE year = ? AND month = ?", [y.year, m.month])[0].c;
+      const mCount = query(`SELECT COUNT(*) as c FROM documents WHERE year = ? AND month = ?${userClause}`, [y.year, m.month])[0].c;
       const mName = monthName(m.month);
       html += `<div class="tree-month">
         <div class="tree-month-header" onclick="toggle(this)">
@@ -1864,9 +1965,9 @@ function renderArchiveTree() {
           <span class="badge badge-neutral">${mCount}</span>
         </div>
         <div class="tree-children tree-collapsed">`;
-      const days = query("SELECT DISTINCT day FROM documents WHERE year = ? AND month = ? ORDER BY day DESC", [y.year, m.month]);
+      const days = query(`SELECT DISTINCT day FROM documents WHERE year = ? AND month = ?${userClause} ORDER BY day DESC`, [y.year, m.month]);
       for (const d of days) {
-        const dCount = query("SELECT COUNT(*) as c FROM documents WHERE year = ? AND month = ? AND day = ?", [y.year, m.month, d.day])[0].c;
+        const dCount = query(`SELECT COUNT(*) as c FROM documents WHERE year = ? AND month = ? AND day = ?${userClause}`, [y.year, m.month, d.day])[0].c;
         html += `<div class="tree-day">
           <div class="tree-day-header" onclick="toggle(this)">
             <span style="display:flex; align-items:center; gap:8px;">
@@ -1879,7 +1980,7 @@ function renderArchiveTree() {
         const docs = query(`
           SELECT d.*, u.name as user_name FROM documents d
           JOIN users u ON d.uploaded_by = u.id
-          WHERE d.year = ? AND d.month = ? AND d.day = ?
+          WHERE d.year = ? AND d.month = ? AND d.day = ?${restrict ? ` AND d.uploaded_by = ${currentUser.id}` : ''}
           ORDER BY d.uploaded_at DESC
         `, [y.year, m.month, d.day]);
         for (const doc of docs) {
@@ -1916,10 +2017,10 @@ function renderDocCard(d) {
       <button class="btn btn-ghost btn-sm" onclick="viewDocument(${d.id})" title="عرض">
         <svg class="icon"><use href="#i-eye"/></svg>عرض
       </button>
-      <button class="btn btn-ghost btn-sm btn-icon-only" onclick="printDocument(${d.id})" title="طباعة">
+      ${hasPermission('print') ? `<button class="btn btn-ghost btn-sm btn-icon-only" onclick="printDocument(${d.id})" title="طباعة">
         <svg class="icon"><use href="#i-printer"/></svg>
-      </button>
-      ${currentUser.role === 'admin' ? `<button class="btn btn-ghost-danger btn-sm btn-icon-only" onclick="deleteDocument(${d.id})" title="حذف">
+      </button>` : ''}
+      ${hasPermission('delete_doc') ? `<button class="btn btn-ghost-danger btn-sm btn-icon-only" onclick="deleteDocument(${d.id})" title="حذف">
         <svg class="icon"><use href="#i-trash"/></svg>
       </button>` : ''}
     </div>
@@ -1960,6 +2061,10 @@ function performSearch() {
 
   let sql = `SELECT d.*, u.name as user_name FROM documents d JOIN users u ON d.uploaded_by = u.id WHERE 1=1`;
   const params = [];
+  if (!hasPermission('view_others')) {
+    sql += ` AND d.uploaded_by = ?`;
+    params.push(currentUser.id);
+  }
   if (q) {
     sql += ` AND (d.code LIKE ? OR d.title LIKE ? OR d.description LIKE ? OR d.tags LIKE ? OR d.outgoing_number LIKE ? OR d.incoming_number LIKE ? OR d.book_number LIKE ? OR d.category LIKE ? OR u.name LIKE ?)`;
     const like = '%' + q + '%';
@@ -2007,14 +2112,17 @@ function highlight(text, q) {
 function viewDocument(id) {
   const doc = query("SELECT d.*, u.name as user_name FROM documents d JOIN users u ON d.uploaded_by = u.id WHERE d.id = ?", [id])[0];
   if (!doc) return;
+  if (!hasPermission('view_others') && doc.uploaded_by !== currentUser.id) {
+    toast('ليست لديك صلاحية لفتح هذه الوثيقة', 'error'); return;
+  }
   const files = query("SELECT * FROM files WHERE doc_id = ?", [id]);
   document.getElementById('docViewTitle').innerHTML = `<code style="background:var(--primary); color:var(--gold); padding:3px 9px; border-radius:5px; font-size:13px; font-weight:700; margin-left:10px;">${escapeHtml(doc.code || '---')}</code>${escapeHtml(doc.title)}`;
   let html = `
     <div style="display:flex; gap:8px; margin-bottom:14px;">
-      <button class="btn btn-primary" onclick="printDocument(${doc.id})">
+      ${hasPermission('print') ? `<button class="btn btn-primary" onclick="printDocument(${doc.id})">
         <svg class="icon"><use href="#i-printer"/></svg>طباعة الوثيقة
-      </button>
-      ${currentUser.role === 'admin' ? `<button class="btn btn-ghost-danger" onclick="deleteDocument(${doc.id}); closeModal('docViewModal');">
+      </button>` : ''}
+      ${hasPermission('delete_doc') ? `<button class="btn btn-ghost-danger" onclick="deleteDocument(${doc.id}); closeModal('docViewModal');">
         <svg class="icon"><use href="#i-trash"/></svg>حذف
       </button>` : ''}
     </div>`;
@@ -2224,12 +2332,17 @@ function deleteDocument(id) {
 // ============= USERS =============
 function renderUsers() {
   const users = query("SELECT * FROM users ORDER BY CAST(user_code AS INTEGER)");
-  document.getElementById('usersTableBody').innerHTML = users.map(u => `
+  document.getElementById('usersTableBody').innerHTML = users.map(u => {
+    const perms = getUserPermissions(u);
+    const permLabel = u.role === 'admin'
+      ? '<span class="badge badge-admin">كل الصلاحيات</span>'
+      : `<span class="badge badge-neutral" title="${perms.map(p => ALL_PERMISSIONS.find(x => x.id === p)?.label).filter(Boolean).join(' · ')}">${perms.length} صلاحية</span>`;
+    return `
     <tr>
       <td><code style="background:var(--accent-light); color:var(--accent); border:1px solid #fde68a; font-weight:700;">${escapeHtml(u.user_code || '---')}</code></td>
       <td>${escapeHtml(u.name)}</td>
       <td><code>${escapeHtml(u.username)}</code></td>
-      <td><span class="badge badge-${u.role}">${u.role === 'admin' ? 'مدير' : 'مستخدم'}</span></td>
+      <td><span class="badge badge-${u.role}">${u.role === 'admin' ? 'مدير' : 'مستخدم'}</span> ${permLabel}</td>
       <td><span class="badge badge-neutral">${u.doc_counter || 0} وثيقة</span></td>
       <td>${new Date(u.created_at).toLocaleDateString('ar-IQ')}</td>
       <td style="text-align:left;">
@@ -2241,7 +2354,7 @@ function renderUsers() {
         </button>` : ''}
       </td>
     </tr>
-  `).join('');
+  `; }).join('');
 }
 
 function openCreateUserModal() {
@@ -2251,6 +2364,8 @@ function openCreateUserModal() {
   document.getElementById('newUserCode').value = '';
   document.getElementById('newUserRole').value = 'user';
   document.getElementById('newCredentials').style.display = 'none';
+  renderPermissionsList('new', getDefaultPermissions());
+  toggleNewPermissionsBox();
   openModal('createUserModal');
 }
 
@@ -2259,6 +2374,49 @@ function autoFillAllFields() {
   document.getElementById('newPassword').value = generatePassword();
   document.getElementById('newUserCode').value = generateUserCode();
   toast('تم توليد البيانات', 'success');
+}
+
+function renderPermissionsList(prefix, selected) {
+  const list = document.getElementById(prefix + 'PermissionsList');
+  const set = new Set(selected || []);
+  list.innerHTML = ALL_PERMISSIONS.map(p => `
+    <div class="perm-item ${set.has(p.id) ? 'checked' : ''}" onclick="togglePermItem(this, '${prefix}_${p.id}')">
+      <input type="checkbox" id="${prefix}_${p.id}" ${set.has(p.id) ? 'checked' : ''} onclick="event.stopPropagation()" onchange="this.parentElement.classList.toggle('checked', this.checked)">
+      <svg class="icon perm-icon"><use href="#${p.icon}"/></svg>
+      <label for="${prefix}_${p.id}">${p.label}</label>
+    </div>
+  `).join('');
+}
+
+function togglePermItem(div, id) {
+  const cb = document.getElementById(id);
+  cb.checked = !cb.checked;
+  div.classList.toggle('checked', cb.checked);
+}
+
+function getCheckedPermissions(prefix) {
+  return ALL_PERMISSIONS.filter(p => document.getElementById(prefix + '_' + p.id)?.checked).map(p => p.id);
+}
+
+function setAllPermissions(prefix, on) {
+  ALL_PERMISSIONS.forEach(p => {
+    const cb = document.getElementById(prefix + '_' + p.id);
+    if (cb) { cb.checked = on; cb.parentElement.classList.toggle('checked', on); }
+  });
+}
+
+function setDefaultPermissions(prefix) {
+  renderPermissionsList(prefix, getDefaultPermissions());
+}
+
+function toggleNewPermissionsBox() {
+  const isAdmin = document.getElementById('newUserRole').value === 'admin';
+  document.getElementById('newPermissionsBox').style.display = isAdmin ? 'none' : 'block';
+}
+
+function toggleEditPermissionsBox() {
+  const isAdmin = document.getElementById('editUserRole').value === 'admin';
+  document.getElementById('editPermissionsBox').style.display = isAdmin ? 'none' : 'block';
 }
 
 function generateUsername() {
@@ -2312,9 +2470,10 @@ function createUser() {
     userCode = generateUserCode();
   }
 
+  const permissions = role === 'admin' ? null : JSON.stringify(getCheckedPermissions('new'));
   execute(
-    "INSERT INTO users (username, password, name, role, user_code, doc_counter, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    [username, hashPassword(password), name, role, userCode, 0, new Date().toISOString()]
+    "INSERT INTO users (username, password, name, role, user_code, doc_counter, permissions, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    [username, hashPassword(password), name, role, userCode, 0, permissions, new Date().toISOString()]
   );
   logActivity('إنشاء مستخدم', `الكود: ${userCode} | الاسم: ${name} | اسم المستخدم: ${username}`);
   document.getElementById('newCredentials').innerHTML = `
@@ -2359,6 +2518,8 @@ function openEditUserModal(id) {
   document.getElementById('editPassword').value = '';
   document.getElementById('editUserCode').value = u.user_code || '';
   document.getElementById('editUserRole').value = u.role;
+  renderPermissionsList('edit', getUserPermissions(u));
+  toggleEditPermissionsBox();
   openModal('editUserModal');
 }
 
@@ -2393,16 +2554,18 @@ function saveUserEdit() {
   const role = document.getElementById('editUserRole').value;
   const newPassword = document.getElementById('editPassword').value;
 
+  const permissions = role === 'admin' ? null : JSON.stringify(getCheckedPermissions('edit'));
+
   if (newPassword) {
     if (newPassword.length < 4) { toast('كلمة المرور يجب أن تكون 4 أحرف على الأقل', 'error'); return; }
     execute(
-      "UPDATE users SET name = ?, username = ?, user_code = ?, role = ?, password = ? WHERE id = ?",
-      [name, username, userCode, role, hashPassword(newPassword), id]
+      "UPDATE users SET name = ?, username = ?, user_code = ?, role = ?, permissions = ?, password = ? WHERE id = ?",
+      [name, username, userCode, role, permissions, hashPassword(newPassword), id]
     );
   } else {
     execute(
-      "UPDATE users SET name = ?, username = ?, user_code = ?, role = ? WHERE id = ?",
-      [name, username, userCode, role, id]
+      "UPDATE users SET name = ?, username = ?, user_code = ?, role = ?, permissions = ? WHERE id = ?",
+      [name, username, userCode, role, permissions, id]
     );
   }
 
